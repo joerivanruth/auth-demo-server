@@ -2,6 +2,7 @@
 
 import argparse
 import logging
+import os
 import re
 import socket
 import threading
@@ -153,4 +154,10 @@ if __name__ == '__main__':
     args = argparser.parse_args()
     logging.basicConfig(level=logging.DEBUG)
     logging.debug(args)
+    old_excepthook = threading.excepthook
+    def my_excepthook(eargs, /):
+        global old_excepthook
+        old_excepthook(eargs)
+        os._exit(1)
+    threading.excepthook = my_excepthook
     main(args)
