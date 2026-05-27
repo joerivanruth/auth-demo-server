@@ -43,7 +43,11 @@ class Handshake:
         ini_nonce = ini_nonce[:10]  # shorten it for readability
         algos = ','.join(self.hash_algorithms).upper()
         challenge = f'{ini_nonce}:mserver:9:{algos}:LIT:{self.obfuscation_algo.upper()}:sql=6:BINARY=1:OOBINTR=1:CLIENTINFO:'
-        self.conn.send(challenge)
+        try:
+            self.conn.send(challenge)
+        except BrokenPipeError:
+            logging.info(f'{self.id}: Client closed the connection')
+            return False
 
         response = self.conn.receive()
         if response is None:

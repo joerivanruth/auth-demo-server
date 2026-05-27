@@ -81,7 +81,10 @@ def interact(conn: Mapi, hs: Handshake):
             # interact_sql has handled it
             continue
 
-        conn.send(f'!This is the demo server, cannot handle message: {msg}')
+        try:
+            conn.send(f'!This is the demo server, cannot handle message: {msg}')
+        except OSError:
+            pass
         return
 
 
