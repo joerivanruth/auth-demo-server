@@ -12,3 +12,9 @@ line-length = 96
 [tool.ruff.format]
 quote-style = "single"
 indent-style = "space"
+
+[dependency-groups]
+dev = [
+    "pymonetdb>=1.9.0",
+    "pytest>=9.0.3",
+]
