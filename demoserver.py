@@ -21,7 +21,13 @@ def parse_sockaddr(s):
 
 
 argparser = argparse.ArgumentParser()
-argparser.add_argument("listen_addr", type=parse_sockaddr, nargs="?", default="50000")
+argparser.add_argument(
+    "listen_addr",
+    type=parse_sockaddr,
+    nargs="?",
+    default="50000",
+    help="[Host:]port to listen on, default is 50000",
+)
 
 
 def main(args):
@@ -66,13 +72,8 @@ def handle_connection(sock: socket.socket, id: str, args):
 
 
 def interact(conn: Mapi, hs: Handshake):
-    conn.sock.settimeout(5)
     while True:
-        try:
-            msg = conn.receive()
-        except TimeoutError:
-            logging.info(f"{conn.id}: No activity")
-            return
+        msg = conn.receive()
         if msg is None:
             return
         if msg.startswith("Xclientinfo "):
@@ -88,7 +89,7 @@ def interact(conn: Mapi, hs: Handshake):
 
 def interact_sql(conn: Mapi, hs: Handshake, sql: str) -> bool:
     m = re.match(
-        "^SELECT \"?name\"?, \"?value\"? FROM \"?sys\"?.\"?env\"?\\(\\)(?: AS env) WHERE name IN \\(([a-z_', ]*)\\)$",
+        '^SELECT "?name"?, "?value"? FROM "?sys"?."?env"?\\(\\)(?: AS env) WHERE name IN \\(([a-z_\', ]*)\\)$',
         sql,
         re.I,
     )
@@ -133,6 +134,8 @@ def interact_sql(conn: Mapi, hs: Handshake, sql: str) -> bool:
     if sql.lower() == "select current_schema":
         rs = ResultSet(".%2", **{ "%2": "varchar"})
         rs.add(**{"%2": "sys"})
+        conn.send(rs.render())
+        return True
 
     return False
 
