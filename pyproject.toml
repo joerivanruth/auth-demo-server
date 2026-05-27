@@ -5,3 +5,10 @@ description = "A testbed for the new authentication features"
 readme = "README.md"
 requires-python = ">=3.13"
 dependencies = []
+
+[tool.ruff]
+line-length = 96
+
+[tool.ruff.format]
+quote-style = "single"
+indent-style = "space"

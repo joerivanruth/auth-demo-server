@@ -17,15 +17,15 @@ class Mapi:
         self.id = id
 
     def send(self, msg: Union[str | Buffer]):
-        msg = memoryview(bytes(msg, "utf-8") if isinstance(msg, str) else msg)
-        logging.debug(f"{self.id}: SEND {bytes(msg)}")
+        msg = memoryview(bytes(msg, 'utf-8') if isinstance(msg, str) else msg)
+        logging.debug(f'{self.id}: SEND {bytes(msg)}')
 
         for i in range(0, len(msg) or 1, self.CHUNK_SIZE):
             start = i * self.CHUNK_SIZE
             end = start + self.CHUNK_SIZE
             chunk = msg[start:end]
             is_last = end >= len(msg)
-            header = struct.pack("<H", 2 * len(chunk) + int(is_last))
+            header = struct.pack('<H', 2 * len(chunk) + int(is_last))
             self.sock.sendall(header)
             self.sock.sendall(chunk)
 
@@ -35,25 +35,25 @@ class Mapi:
         parts = []
         header = self._recvbytes(2, True)
         if not header:
-            logging.debug(f"{self.id}: Peer gracefully closed the connection")
+            logging.debug(f'{self.id}: Peer gracefully closed the connection')
             return None
         while True:
-            n = struct.unpack("<H", header)[0]
+            n = struct.unpack('<H', header)[0]
             nbytes = n // 2
             is_last = n & 1
             parts.append(self._recvbytes(nbytes, False))
             if is_last:
                 break
             header = self._recvbytes(2, False)
-        msg = b"".join(parts)
-        logging.debug(f"{self.id}: RECV {msg!r}")
+        msg = b''.join(parts)
+        logging.debug(f'{self.id}: RECV {msg!r}')
         return msg
 
     def receive(self) -> Optional[str]:
         msg = self.receive_binary()
         if msg is None:
             return None
-        return str(msg, "utf-8")
+        return str(msg, 'utf-8')
 
     def shutdown(self):
         self.sock.shutdown(socket.SHUT_WR)
@@ -69,14 +69,14 @@ class Mapi:
         In that case, an empty buffer is returned.
         """
 
-        msg = b""
+        msg = b''
         while len(msg) < nbytes:
             more = self.sock.recv(nbytes - len(msg))
             if not more:
                 if eof_allowed and not msg:
                     return msg
                 else:
-                    raise EOFError("Message ended halfway a message")
+                    raise EOFError('Message ended halfway a message')
             msg += more
         return msg
 
@@ -105,16 +105,16 @@ class ResultSet:
             self.column_widths.append(0)
 
     def add(self, /, **colvalues):
-        row: list[str] = ["null"] * len(self.column_names)
+        row: list[str] = ['null'] * len(self.column_names)
         for col, value in colvalues.items():
             width = None
             escaped_value: str
             if isinstance(value, str):
                 width = len(value)
                 value = (
-                    value.replace("\\", "\\\\")
-                    .replace("\n", "\\\n")
-                    .replace("\t", "\\\t")
+                    value.replace('\\', '\\\\')
+                    .replace('\n', '\\\n')
+                    .replace('\t', '\\\t')
                     .replace('"', '\\"')
                 )
                 escaped_value = f'"{value}"'
@@ -138,16 +138,16 @@ class ResultSet:
             malopt_time = 0
             sqlopt_time = 0
             print(
-                f"&1 {res_id} {nrows} {ncols} {nrows_in_msg} {query_id} {query_time} {malopt_time} {sqlopt_time}"
+                f'&1 {res_id} {nrows} {ncols} {nrows_in_msg} {query_id} {query_time} {malopt_time} {sqlopt_time}'
             )
-            print(fmt_header_line("table_name", [self.table_name] * ncols))
-            print(fmt_header_line("name", self.column_names))
-            print(fmt_header_line("type", self.column_types))
-            print(fmt_header_line("length", [str(w) for w in self.column_widths]))
+            print(fmt_header_line('table_name', [self.table_name] * ncols))
+            print(fmt_header_line('name', self.column_names))
+            print(fmt_header_line('type', self.column_types))
+            print(fmt_header_line('length', [str(w) for w in self.column_widths]))
             for row in self.rows:
-                print("[ " + ",\t".join(row) + "\t]")
+                print('[ ' + ',\t'.join(row) + '\t]')
         return w.getvalue()
 
 
 def fmt_header_line(desc, values):
-    return "% " + ",\t".join(values) + " # " + desc
+    return '% ' + ',\t'.join(values) + ' # ' + desc
