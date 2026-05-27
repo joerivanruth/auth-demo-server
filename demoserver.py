@@ -29,6 +29,7 @@ argparser.add_argument(
     default='50000',
     help='[Host:]port to listen on, default is 50000',
 )
+argparser.add_argument('-v', '--verbose', action='store_true')
 
 
 def main(args):
@@ -155,12 +156,15 @@ connection_id_counter = 10
 
 if __name__ == '__main__':
     args = argparser.parse_args()
-    logging.basicConfig(level=logging.DEBUG)
+    level = logging.DEBUG if args.verbose else logging.WARNING
+    logging.basicConfig(level=level)
     logging.debug(args)
     old_excepthook = threading.excepthook
+
     def my_excepthook(eargs, /):
         global old_excepthook
         old_excepthook(eargs)
         os._exit(1)
+
     threading.excepthook = my_excepthook
     main(args)
