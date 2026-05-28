@@ -73,44 +73,27 @@ def handle_connection(sock: socket.socket, id: str, args):
 def interact(conn: Mapi, hs: Handshake):
     while True:
         msg = conn.receive()
-        if msg is None:
+        if not msg:
             return
         if msg.startswith('Xclientinfo '):
             conn.send('')
             continue
-        if msg.startswith('s') and interact_sql(conn, hs, msg[1:].strip(' \t\n;')):
+        if msg[:1].lower() == 's' and interact_sql(conn, hs, msg[1:].strip(' \t\n;')):
             # interact_sql has handled it
             continue
 
         try:
-            conn.send(f'!This is the demo server, cannot handle message: {msg}')
+            truncated_msg = msg.split('\n', 1)[0]
+            conn.send(f"!42000!Demo server can't handle message: {truncated_msg}\n")
         except OSError:
             pass
         return
 
 
 def interact_sql(conn: Mapi, hs: Handshake, sql: str) -> bool:
+    # jdbcclient and mclient use this to retrieve env settings
     m = re.match(
-        '^SELECT "?name"?, "?value"? FROM "?sys"?."?env"?\\(\\)(?: AS env) WHERE name IN \\(([a-z_\', ]*)\\)$',
-        sql,
-        re.I,
-    )
-    if m:
-        requested = set(n.strip().strip("'") for n in m.group(1).split(','))
-        rs = ResultSet('.env', name='varchar', value='varchar')
-        if 'gdk_dbname' in requested:
-            rs.add(name='gdk_dbname', value=hs.dbname)
-        if 'revision' in requested:
-            rs.add(name='revision', value='Unknown')
-        if 'monet_version' in requested:
-            rs.add(name='monet_version', value='56.0.0')
-        if 'monet_release' in requested:
-            rs.add(name='monet_release', value='Unknown')
-        conn.send(rs.render())
-        return True
-
-    m = re.match(
-        """^SELECT "name", "value" FROM "sys"."env"\\(\\) WHERE "name" IN \\(([a-z_', ]*)\\) UNION SELECT 'current_user' as "name", current_user as "value"$""",
+        r"^SELECT \"?name\"?, \"?value\"? FROM \"?sys\"?.\"?env\"?\(\)(?: AS env)? WHERE \"?name\"? IN \(([a-z0-9_' ,]*)\)( UNION SELECT 'current_user' AS \"?name\"?, current_user as \"?value\"?)?",
         sql,
         re.I,
     )
@@ -129,10 +112,12 @@ def interact_sql(conn: Mapi, hs: Handshake, sql: str) -> bool:
             rs.add(name='max_clients', value='64')
         if 'monet_release' in requested:
             rs.add(name='raw_strings', value='false')
-        rs.add(name='current_user', value=hs.user)
+        if m.group(2):
+            rs.add(name='current_user', value=hs.user)
         conn.send(rs.render())
         return True
 
+    # jdbcclient needs this
     if sql.lower() == 'select current_schema':
         rs = ResultSet('.%2', **{'%2': 'varchar'})
         rs.add(**{'%2': 'sys'})
