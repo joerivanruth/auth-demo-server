@@ -24,6 +24,7 @@ FORCE_CLIENTS = set(client for client in os.getenv('FORCE_CLIENTS', '').split(',
 if 'all' in FORCE_CLIENTS:
     FORCE_CLIENTS |= {'pymonetdb', 'mclient', 'jdbc'}
 
+MCLIENT = os.getenv('MCLIENT', 'mclient')
 
 @functools.cache
 def find_pymonetdb_or_skip():
@@ -36,10 +37,9 @@ def find_pymonetdb_or_skip():
 
 @functools.cache
 def find_mclient_or_skip() -> str:
-    mclient = 'mclient'
     try:
-        subprocess.check_output([mclient, '--version'])
-        return mclient
+        subprocess.check_output([MCLIENT, '--version'])
+        return MCLIENT
     except (FileNotFoundError, subprocess.CalledProcessError):
         if 'mclient' not in FORCE_CLIENTS:
             raise SkipTest('mclient not available')
