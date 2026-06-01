@@ -195,3 +195,8 @@ class PymonetdbTests(TestCase):
             mclient.communicate()
             retcode = mclient.wait(timeout=3)
             self.assertEqual(0, retcode, 'jdbcclient should have exited with status 0')
+
+    def test_democlient(self):
+        with running_demoserver() as url:
+            cmd = [sys.executable, 'democlient.py', '-v', url]
+            subprocess.check_call(cmd)
