@@ -18,9 +18,5 @@ jobs:
       - name: Install pymonetdb
         run: pip3 install --user --upgrade pymonetdb cryptography pytest
 
-      - run: ls -l jdbcclient.jre8.jar
-
-      - run: CLASSPATH=jdbcclient.jre8.jar java org.monetdb.client.JdbcClient --version
-
       - name: Run pytest
         run: CLASSPATH=jdbcclient.jre8.jar pytest -v
