@@ -1,0 +1,26 @@
+name: Pytest
+on: push
+jobs:
+  pytest:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install mclient
+        uses: MonetDB/install-monetdb@v0.8
+        with:
+          start: "false"
+
+      - name: Download jdbcclient jar
+        run: curl -sSf -O https://www.monetdb.org/downloads/Java/jdbcclient.jre8.jar
+
+      - name: Install pymonetdb
+        run: pip3 install --user --upgrade pymonetdb cryptography pytest
+
+      - run: ls -l jdbcclient.jre8.jar
+
+      - run: CLASSPATH=jdbcclient.jre8.jar java org.monetdb.client.JdbcClient --version
+
+      - name: Run pytest
+        run: CLASSPATH=jdbcclient.jre8.jar pytest -v
