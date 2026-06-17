@@ -47,6 +47,8 @@ def find_mclient_or_skip() -> str:
     except (FileNotFoundError, subprocess.CalledProcessError):
         if 'mclient' not in FORCE_CLIENTS:
             raise SkipTest('mclient not available')
+        else:
+            return MCLIENT
 
 
 @functools.cache
@@ -61,7 +63,7 @@ def find_jdbcclient_or_skip():
         subprocess.check_output(['java', jdbcclient, '--version'])
     except subprocess.CalledProcessError:
         if 'jdbc' not in FORCE_CLIENTS:
-            raise SkipTest(f'monetdb-jdbc not on the class path')
+            raise SkipTest('monetdb-jdbc not on the class path')
     return jdbcclient
 
 
@@ -70,7 +72,7 @@ def find_pty_or_skip():
     try:
         importlib.import_module('pty')
     except ModuleNotFoundError:
-        raise SkipTest(f'pty only available on Unix')
+        raise SkipTest('pty only available on Unix')
 
 
 def pick_listenaddr() -> Tuple[str, int]:

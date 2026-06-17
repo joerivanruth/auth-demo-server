@@ -7,8 +7,7 @@ import logging
 import os
 import socket
 import stat
-import sys
-from typing import Tuple
+from typing import Optional, Tuple
 
 from framing import Mapi
 from pymonetdb.target import Target
@@ -63,7 +62,7 @@ def connect(target: Target, enclosing_round, args) -> Tuple[Mapi, Target]:
 
         # Follow the steps in https://github.com/MonetDBSolutions/monetdb-url-spec/blob/main/monetdb-url.md#connecting
 
-        err = None
+        err: Optional[OSError | ErrorMessage] = None
         sock = None
 
         # Step 1: validation
@@ -224,6 +223,7 @@ def attempt_login(target: Target, mapi: Mapi, args):
     [nonce, servertype, proto, hash_algos, endian, obfusc_algo, *rest] = parts
     if proto != '9':
         raise ErrorMessage('Only protocol version 9 is supported, not {proto}')
+    assert nonce is not None
 
     if servertype == 'merovingian':
         user = 'merovingian'
@@ -242,6 +242,8 @@ def attempt_login(target: Target, mapi: Mapi, args):
     mapi.send(reply)
 
     server_response = mapi.receive()
+    if server_response is None:
+        raise ErrorMessage('server closed the connection during login')
     check_server_error(server_response)
     first_line = server_response.strip().split('\n', 1)[0]
     return first_line

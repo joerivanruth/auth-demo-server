@@ -18,7 +18,7 @@ class Mapi:
 
     def send(self, msg: Union[str | Buffer]):
         msg = memoryview(bytes(msg, 'utf-8') if isinstance(msg, str) else msg)
-        logging.debug(f'{self.id}: SEND {bytes(msg)}')
+        logging.debug(f'{self.id}: SEND {bytes(msg)!r}')
 
         for i in range(0, len(msg) or 1, self.CHUNK_SIZE):
             start = i * self.CHUNK_SIZE
@@ -104,7 +104,7 @@ class ResultSet:
             self.column_types.append(coltype)
             self.column_widths.append(0)
 
-    def add(self, /, **colvalues):
+    def add(self, /, **colvalues) -> None:
         row: list[str] = ['null'] * len(self.column_names)
         for col, value in colvalues.items():
             width = None
