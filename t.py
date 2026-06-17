@@ -9,28 +9,49 @@ from mechanisms import Mechanism
 import mechanisms
 
 
+def show(side: str, btext: Optional[bytes]):
+    print(f'{side}: ', end='')
+    if btext is None:
+        print('None')
+        return
+    maxlen = 36
+    if len(btext) <= maxlen:
+        print(f'{btext!r}')
+    else:
+        n = maxlen // 2
+        print(f'{btext[:n]!r} .. {btext[-n:]!r} ({len(btext)} bytes)')
+
+
 def dialogue(mech: Mechanism, client_opts: dict[str, Any]):
     assert isinstance(mech, Mechanism), Mechanism
+
+    print(f'* {mech.wire_name}')
+
     target = Target()
     target.parse('monetdb://localhost.:55000/demo')
     for k, v in client_opts.items():
         target.set(k, v)
     target.validate()
 
-    print(f'* {mech.wire_name}')
+    credstore = CredStore.default()
+    credlist = list(credstore.list())
+    print(f'Cred store has {len(credlist)} items')
+    for cred in credlist:
+        print(f'- {cred.user} {cred.kind}={cred.password}')
+    print()
 
     client = mech.start_client(target)
-    server = mech.start_server(target.user, CredStore.default())
+    server = mech.start_server(target.user, credstore)
 
     challenge: Optional[bytes] = server.initial_challenge()
     if mech.client_first:
         assert challenge == b'', f'First client-first challenge not empty: {challenge!r}'
     for i in range(10):
         if not (mech.client_first and i == 0):
-            print(f'S: {challenge!r}')
+            show('S', challenge)
         assert challenge is not None
         response = client.respond(challenge)
-        print(f'C: {response!r}')
+        show('C', response)
         challenge = server.next_challenge(response)
         if challenge is None:
             print('S: OK')
@@ -43,3 +64,4 @@ def dialogue(mech: Mechanism, client_opts: dict[str, Any]):
 
 dialogue(mechanisms.PlainMechanism(), dict())
 dialogue(mechanisms.DigestMechanism(), dict())
+dialogue(mechanisms.NaiveGSSAPIMechanism(), dict())
