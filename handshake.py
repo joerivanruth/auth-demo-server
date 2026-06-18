@@ -2,6 +2,7 @@ import hashlib
 import logging
 import secrets
 
+from credentials import CredStore, PLAIN
 import framing
 
 
@@ -23,7 +24,7 @@ class Handshake:
         if algo in hashlib.algorithms_available
     ]
     obfuscation_algo = 'sha512'
-    passwords = dict(monetdb='monetdb')
+    credstore: CredStore
     id: str
     conn: framing.Mapi
     args = None
@@ -34,6 +35,7 @@ class Handshake:
         self.id = conn.id
         self.conn = conn
         self.args = args
+        self.credstore = CredStore.default()
 
     def execute(self) -> bool:
         return self.initial_handshake()
@@ -82,7 +84,7 @@ class Handshake:
             logging.error(f'{self.id}: unsupported hash algo: {algo}')
             return f'Unsupported hash algo: {algo}'
 
-        plain_password = self.passwords.get(self.user)
+        plain_password = self.credstore.get_last(self.user, PLAIN)
         if plain_password is None:
             logging.error(f'{self.id}: Unknown user: {self.user}')
             return invalid_credentials
