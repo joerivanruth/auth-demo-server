@@ -1,4 +1,4 @@
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 from credentials import PLAIN, CredStore
 from mechanisms import (
@@ -39,9 +39,9 @@ class PlainServer(ServerSide):
     def initial_challenge(self):
         return b''
 
-    def next_challenge(self, token):
+    def next_challenge(self, token) -> Tuple[bool, Optional[bytes]]:
         password = str(token, 'utf-8')
         if password == self.password:
-            return None
+            return True, None
         else:
             raise invalid_credentials()

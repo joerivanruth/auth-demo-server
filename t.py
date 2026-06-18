@@ -10,17 +10,23 @@ from mechanisms import Mechanism
 import mechanisms
 
 
-def show(side: str, btext: Optional[bytes]):
-    print(f'{side}: ', end='')
-    if btext is None:
-        print('None')
-        return
+def show(side: str, payload: Optional[bytes | str], modifier=None):
     maxlen = 36
-    if len(btext) <= maxlen:
-        print(f'{btext!r}')
+    print(f'{side}', end='')
+    if modifier:
+        print(f': {modifier}', end='')
+    if payload is None:
+        print()
+        return
+    else:
+        print(': ', end='')
+    if isinstance(payload, str):
+        print(payload)
+    elif len(payload) <= maxlen:
+        print(f'{payload!r}')
     else:
         n = maxlen // 2
-        print(f'{btext[:n]!r} .. {btext[-n:]!r} ({len(btext)} bytes)')
+        print(f'{payload[:n]!r} .. {payload[-n:]!r} ({len(payload)} bytes)')
 
 
 def dialogue(
@@ -34,7 +40,6 @@ def dialogue(
     adjusted_server_opts = dict(keytab=os.path.expanduser('~/monetdb.keytab')) | (
         server_opts or {}
     )
-    print(f'* {mech.wire_name}')
 
     target = Target()
     target.parse('monetdb://localhost.:55000/demo')
@@ -47,26 +52,38 @@ def dialogue(
     print(f'Cred store has {len(credlist)} items')
     for cred in credlist:
         print(f'- {cred.user} {cred.kind}={cred.password}')
-    print()
 
     client = mech.start_client(target)
     server = mech.start_server(target.user, credstore, adjusted_server_opts)
 
     challenge: Optional[bytes] = server.initial_challenge()
+    done = False
+
+    # The main loop is based on server-first. For client-first we need to do some tweaking
     if mech.client_first:
-        assert challenge == b'', f'First client-first challenge not empty: {challenge!r}'
+        # with client-first, the initial challenge must be empty
+        assert challenge == b'', (
+            f'Initial {mech.__class__.__name__} challenge not empty: {challenge!r}'
+        )
+        response = client.respond(b'')
+    else:
+        response = None
+    show('C', response, modifier=f"Request {mech.wire_name} for user '{target.user}'")
+    if mech.client_first:
+        done, challenge = server.next_challenge(response or b'')
+
     for i in range(10):
-        if not (mech.client_first and i == 0):
-            show('S', challenge)
-        assert challenge is not None
-        response = client.respond(challenge)
-        show('C', response)
-        challenge = server.next_challenge(response)
-        if challenge is None:
-            print('S: OK')
+        if done:
+            show('S', challenge, modifier='OK')
+            report = client.wrap_up(challenge)
+            show('C', report, modifier='HAPPY')
             print()
             break
-        print()
+        else:
+            show('S', challenge)
+        response = client.respond(challenge or b'')
+        show('C', response)
+        done, challenge = server.next_challenge(response or b'')
     else:
         raise Exception('exchange takes too long')
 

@@ -1,6 +1,6 @@
 import hashlib
 import secrets
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 from credentials import PLAIN, CredStore
 from mechanisms import ClientSide, Mechanism, ServerSide, invalid_credentials
@@ -43,8 +43,8 @@ class DigestServer(ServerSide):
     def initial_challenge(self):
         return self.nonce
 
-    def next_challenge(self, token):
+    def next_challenge(self, token) -> Tuple[bool, Optional[bytes]]:
         if self.expected is not None and token == self.expected:
-            return None
+            return True, None
         else:
             raise invalid_credentials()

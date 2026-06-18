@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import importlib
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 from pymonetdb.target import Target
 
@@ -12,6 +12,9 @@ class ClientSide:
     def respond(self, token: bytes) -> bytes:
         pass
 
+    def wrap_up(self, additional_data: Optional[bytes]) -> Optional[str]:
+        return None
+
 
 class ServerSide:
     @abstractmethod
@@ -19,7 +22,7 @@ class ServerSide:
         raise NotImplementedError()
 
     @abstractmethod
-    def next_challenge(self, token: bytes) -> Optional[bytes]:
+    def next_challenge(self, token: bytes) -> Tuple[bool, Optional[bytes]]:
         raise NotImplementedError()
 
 

@@ -1,5 +1,5 @@
 import socket
-from typing import Any, Optional
+from typing import Any, Optional, Tuple
 
 import gssapi
 from pymonetdb.target import Target
@@ -79,6 +79,18 @@ class NaiveGSSAPIClient(ClientSide):
         assert not self.ctx.complete
         return self.ctx.step(server_token or None) or b''
 
+    def wrap_up(self, additional_data: Optional[bytes]) -> Optional[str]:
+        assert self.ctx
+        assert not self.ctx.complete
+        tok = self.ctx.step(additional_data)
+        if not self.ctx.complete:
+            raise Reject("Server done but we aren't")
+        assert not tok
+
+        our_name = self.ctx.initiator_name.canonicalize(gssapi.MechType.kerberos)
+        their_name = self.ctx.target_name.canonicalize(gssapi.MechType.kerberos)
+        return f'Authenticated {our_name} -> {their_name}'
+
 
 class NaiveGSSAPIServer(ServerSide):
     user: str
@@ -96,19 +108,21 @@ class NaiveGSSAPIServer(ServerSide):
     def initial_challenge(self):
         return b''
 
-    def next_challenge(self, client_token: bytes) -> Optional[bytes]:
+    def next_challenge(self, client_token: bytes) -> Tuple[bool, Optional[bytes]]:
         if self.ctx is None:
             self.ctx = gssapi.SecurityContext(usage='accept', creds=self.server_creds)
+        assert not self.ctx.complete
+        assert client_token
+        server_token = self.ctx.step(client_token)
         if self.ctx.complete:
             client_principal = self.ctx.initiator_name.canonicalize(gssapi.MechType.kerberos)
             for p in self.acceptable_principals:
-                np = gssapi.Name(p, gssapi.NameType.kerberos_principal).canonicalize(
-                    gssapi.MechType.kerberos
+                nm = gssapi.Name(p, gssapi.NameType.kerberos_principal)
+                canon = nm.canonicalize(gssapi.MechType.kerberos)
+                if canon == client_principal:
+                    break
+            else:
+                raise Reject(
+                    f"User '{self.user}' cannot login with principal {client_principal}"
                 )
-                if np == client_principal:
-                    return None
-            raise Reject(f"User '{self.user}' cannot login with principal {client_principal}")
-        else:
-            assert client_token
-            server_token = self.ctx.step(client_token)
-            return server_token
+        return self.ctx.complete, server_token
