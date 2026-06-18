@@ -1,4 +1,4 @@
-from typing import Optional
+from typing import Any, Optional
 
 from credentials import PLAIN, CredStore
 from mechanisms import (
@@ -19,7 +19,7 @@ class PlainMechanism(Mechanism):
         return PlainClient(target.password)
 
     @staticmethod
-    def start_server(user, credstore: CredStore):
+    def start_server(user, credstore: CredStore, opts: dict[str, Any]):
         return PlainServer(credstore.get_last(user, PLAIN))
 
 

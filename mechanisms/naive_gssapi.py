@@ -18,11 +18,24 @@ class NaiveGSSAPIMechanism(Mechanism):
         return NaiveGSSAPIClient(server_principal)
 
     @staticmethod
-    def start_server(user, credstore: CredStore):
-        fqdn = socket.getfqdn()
-        server_name = gssapi.Name(f'monetdb@{fqdn}', gssapi.NameType.hostbased_service)
-        principals = credstore.get_all(user, PRINCIPAL)
-        return NaiveGSSAPIServer(user, server_name, principals)
+    def start_server(user, credstore: CredStore, opts: dict[str, Any]):
+        principal = opts.get('principal')
+        if not principal:
+            fqdn = socket.getfqdn()
+            principal = f'monetdb@{fqdn}'
+        server_name = parse_principal(principal)
+
+        keytab = opts.get('keytab')
+        assert keytab is None or isinstance(keytab, str)
+        # This 'store layout' is probably specific to MIT Kerberos
+        store: dict[bytes | str, bytes | str] | None = dict(keytab=keytab) if keytab else None
+        acquire_result = gssapi.Credentials.acquire(
+            usage='accept', name=server_name, store=store
+        )
+        server_creds = gssapi.Credentials(acquire_result.creds)
+
+        acceptable_principals = credstore.get_all(user, PRINCIPAL)
+        return NaiveGSSAPIServer(user, server_creds, acceptable_principals)
 
 
 def target_lookup(target: Target, key: str) -> Optional[Any]:
@@ -40,11 +53,14 @@ def determine_server_principal(target: Target) -> gssapi.Name:
         if not host or host == 'localhost':
             host = socket.getfqdn()
         princ = f'monetdb@{host}'
-    name_type = (
-        gssapi.NameType.kerberos_principal
-        if '@' in princ and '/' in princ
-        else gssapi.NameType.hostbased_service
-    )
+    return parse_principal(princ)
+
+
+def parse_principal(princ: str) -> gssapi.Name:
+    if '@' in princ and '/' in princ:
+        name_type = gssapi.NameType.kerberos_principal
+    else:
+        name_type = gssapi.NameType.hostbased_service
     return gssapi.Name(princ, name_type).canonicalize(gssapi.MechType.kerberos)
 
 
@@ -66,22 +82,23 @@ class NaiveGSSAPIClient(ClientSide):
 
 class NaiveGSSAPIServer(ServerSide):
     user: str
-    server_name: gssapi.Name
+    server_creds: gssapi.Credentials
     acceptable_principals: list[str]
     ctx: Optional[gssapi.SecurityContext] = None
 
-    def __init__(self, user: str, server_name: gssapi.Name, principals: list[str]):
+    def __init__(
+        self, user: str, server_creds: gssapi.Credentials, acceptable_principals: list[str]
+    ):
         self.user = user
-        self.server_name = server_name
-        self.acceptable_principals = principals[:]
+        self.server_creds = server_creds
+        self.acceptable_principals = acceptable_principals[:]
 
     def initial_challenge(self):
         return b''
 
     def next_challenge(self, client_token: bytes) -> Optional[bytes]:
         if self.ctx is None:
-            server_creds = gssapi.Credentials(usage='accept', name=self.server_name)
-            self.ctx = gssapi.SecurityContext(usage='accept', creds=server_creds)
+            self.ctx = gssapi.SecurityContext(usage='accept', creds=self.server_creds)
         if self.ctx.complete:
             client_principal = self.ctx.initiator_name.canonicalize(gssapi.MechType.kerberos)
             for p in self.acceptable_principals:

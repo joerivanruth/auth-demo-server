@@ -1,6 +1,6 @@
 import hashlib
 import secrets
-from typing import Optional
+from typing import Any, Optional
 
 from credentials import PLAIN, CredStore
 from mechanisms import ClientSide, Mechanism, ServerSide, invalid_credentials
@@ -13,7 +13,7 @@ class DigestMechanism(Mechanism):
     def start_client(self, target):
         return DigestClient(target.password)
 
-    def start_server(self, user, credstore: CredStore):
+    def start_server(self, user, credstore: CredStore, opts: dict[str, Any]):
         return DigestServer(credstore.get_last(user, PLAIN))
 
 

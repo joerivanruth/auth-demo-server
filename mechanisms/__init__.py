@@ -1,6 +1,6 @@
 from abc import ABC, abstractmethod
 import importlib
-from typing import Optional
+from typing import Any, Optional
 
 from pymonetdb.target import Target
 
@@ -32,7 +32,7 @@ class Mechanism(ABC):
         raise NotImplementedError()
 
     @abstractmethod
-    def start_server(self, user: str, credstore: CredStore) -> ServerSide:
+    def start_server(self, user: str, credstore: CredStore, opts: dict[str, Any]) -> ServerSide:
         raise NotImplementedError()
 
 

@@ -1,5 +1,6 @@
 #!/usr/bin/env python3
 
+import os
 from typing import Any, Optional
 
 from pymonetdb.target import Target
@@ -22,9 +23,17 @@ def show(side: str, btext: Optional[bytes]):
         print(f'{btext[:n]!r} .. {btext[-n:]!r} ({len(btext)} bytes)')
 
 
-def dialogue(mech: Mechanism, client_opts: dict[str, Any]):
+def dialogue(
+    mech: Mechanism,
+    *,
+    client_opts: Optional[dict[str, Any]] = None,
+    server_opts: Optional[dict[str, Any]] = None,
+):
     assert isinstance(mech, Mechanism), Mechanism
-
+    client_opts = client_opts or {}
+    adjusted_server_opts = dict(keytab=os.path.expanduser('~/monetdb.keytab')) | (
+        server_opts or {}
+    )
     print(f'* {mech.wire_name}')
 
     target = Target()
@@ -41,7 +50,7 @@ def dialogue(mech: Mechanism, client_opts: dict[str, Any]):
     print()
 
     client = mech.start_client(target)
-    server = mech.start_server(target.user, credstore)
+    server = mech.start_server(target.user, credstore, adjusted_server_opts)
 
     challenge: Optional[bytes] = server.initial_challenge()
     if mech.client_first:
@@ -62,6 +71,6 @@ def dialogue(mech: Mechanism, client_opts: dict[str, Any]):
         raise Exception('exchange takes too long')
 
 
-dialogue(mechanisms.PlainMechanism(), dict())
-dialogue(mechanisms.DigestMechanism(), dict())
-dialogue(mechanisms.NaiveGSSAPIMechanism(), dict())
+dialogue(mechanisms.PlainMechanism())
+dialogue(mechanisms.DigestMechanism())
+dialogue(mechanisms.NaiveGSSAPIMechanism())
