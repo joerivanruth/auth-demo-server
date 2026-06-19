@@ -51,6 +51,7 @@ def invalid_credentials():
 from credentials import CredStore
 from mechanisms.plain import PlainMechanism
 from mechanisms.digest import DigestMechanism
+from mechanisms.classic import ClassicMechanism
 
 MECHANISMS = [PlainMechanism, DigestMechanism]
 
@@ -66,4 +67,4 @@ if have_gssapi:
     MECHANISMS.append(NaiveGSSAPIMechanism)
 
 
-__all__ = ['Mechanism', 'Reject'] + [m.__name__ for m in MECHANISMS]
+__all__ = ['Mechanism', 'Reject', 'ClassicMechanism'] + [m.__name__ for m in MECHANISMS]

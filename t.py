@@ -117,3 +117,5 @@ def dialogue(
 dialogue(mechanisms.PlainMechanism())
 dialogue(mechanisms.DigestMechanism())
 dialogue(mechanisms.NaiveGSSAPIMechanism())
+
+dialogue(mechanisms.ClassicMechanism('sha256', 'sha512'))
