@@ -6,7 +6,7 @@ from typing import Optional
 from credentials import CredStore
 import framing
 import mechanisms
-from mechanisms import ClassicMechanism, Mechanism
+from mechanisms import ClassicMechanism, Mechanism, Reject
 
 
 # ** [0] t=0.506s RECV HANDSHAKE (DATA) mapi_handshake(), line 469
@@ -68,11 +68,15 @@ class Handshake:
             logging.error(f'{self.id}: unsupported auth mechanism')
             return False
 
-        if isinstance(self.mech, mechanisms.ClassicMechanism):
-            err_msg = self.execute_classic(ini_nonce, payload)
-        else:
-            err_msg = self.execute_modern(payload)
-
+        try:
+            if isinstance(self.mech, mechanisms.ClassicMechanism):
+                err_msg = self.execute_classic(ini_nonce, payload)
+            else:
+                err_msg = self.execute_modern(payload)
+        except Reject as e:
+            logging.error(f'{self.id}: {e}')
+            self.conn.send('!Authentication failed')
+            return False
         if err_msg is not None:
             logging.error(f'{self.id}: {err_msg}')
             self.conn.send('!Authentication failed')
