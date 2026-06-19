@@ -2,6 +2,7 @@ import socket
 from typing import Any, Optional, Tuple
 
 import gssapi
+from gssapi.raw import GSSError
 from pymonetdb.target import Target
 
 from credentials import PRINCIPAL, CredStore
@@ -73,16 +74,22 @@ class NaiveGSSAPIClient(ClientSide):
         self.ctx = None
 
     def respond(self, server_token: bytes):
-        if self.ctx is None:
-            assert not server_token
-            self.ctx = gssapi.SecurityContext(usage='initiate', name=self.server_name)
-        assert not self.ctx.complete
-        return self.ctx.step(server_token or None) or b''
+        try:
+            if self.ctx is None:
+                assert not server_token
+                self.ctx = gssapi.SecurityContext(usage='initiate', name=self.server_name)
+            assert not self.ctx.complete
+            return self.ctx.step(server_token or None) or b''
+        except GSSError as e:
+            raise Reject(str(e)) from None
 
     def wrap_up(self, additional_data: Optional[bytes]) -> Optional[str]:
         assert self.ctx
         assert not self.ctx.complete
-        tok = self.ctx.step(additional_data)
+        try:
+            tok = self.ctx.step(additional_data)
+        except GSSError as e:
+            raise Reject(str(e)) from None
         if not self.ctx.complete:
             raise Reject("Server done but we aren't")
         assert not tok
@@ -109,11 +116,14 @@ class NaiveGSSAPIServer(ServerSide):
         return b''
 
     def next_challenge(self, client_token: bytes) -> Tuple[bool, Optional[bytes]]:
-        if self.ctx is None:
-            self.ctx = gssapi.SecurityContext(usage='accept', creds=self.server_creds)
-        assert not self.ctx.complete
-        assert client_token
-        server_token = self.ctx.step(client_token)
+        try:
+            if self.ctx is None:
+                self.ctx = gssapi.SecurityContext(usage='accept', creds=self.server_creds)
+            assert not self.ctx.complete
+            assert client_token
+            server_token = self.ctx.step(client_token)
+        except GSSError as e:
+            raise Reject(str(e)) from None
         if self.ctx.complete:
             client_principal = self.ctx.initiator_name.canonicalize(gssapi.MechType.kerberos)
             for p in self.acceptable_principals:
@@ -122,7 +132,6 @@ class NaiveGSSAPIServer(ServerSide):
                 if canon == client_principal:
                     break
             else:
-                raise Reject(
-                    f"User '{self.user}' cannot login with principal {client_principal}"
-                )
+                msg = f"User '{self.user}' cannot login with principal {client_principal}"
+                raise Reject(msg)
         return self.ctx.complete, server_token

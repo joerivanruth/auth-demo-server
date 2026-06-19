@@ -6,7 +6,7 @@ from typing import Any, Optional
 from pymonetdb.target import Target
 
 from credentials import CredStore
-from mechanisms import Mechanism
+from mechanisms import Mechanism, Reject
 import mechanisms
 
 
@@ -53,11 +53,18 @@ def dialogue(
     for cred in credlist:
         print(f'- {cred.user} {cred.kind}={cred.password}')
 
-    client = mech.start_client(target)
-    server = mech.start_server(target.user, credstore, adjusted_server_opts)
-
-    challenge: Optional[bytes] = server.initial_challenge()
-    done = False
+    try:
+        client = mech.start_client(target)
+    except Reject as e:
+        show('C', str(e), modifier=f'{mech.wire_name} ERROR')
+        return
+    try:
+        server = mech.start_server(target.user, credstore, adjusted_server_opts)
+        challenge: Optional[bytes] = server.initial_challenge()
+        server_done = False
+    except Reject as e:
+        show('S', str(e), modifier=f'{mech.wire_name} ERROR')
+        return
 
     # The main loop is based on server-first. For client-first we need to do some tweaking
     if mech.client_first:
@@ -65,25 +72,44 @@ def dialogue(
         assert challenge == b'', (
             f'Initial {mech.__class__.__name__} challenge not empty: {challenge!r}'
         )
-        response = client.respond(b'')
+        try:
+            response = client.respond(b'')
+        except Reject as e:
+            show('C', str(e), modifier=f'{mech.wire_name} ERROR')
+            return
     else:
         response = None
     show('C', response, modifier=f"Request {mech.wire_name} for user '{target.user}'")
     if mech.client_first:
-        done, challenge = server.next_challenge(response or b'')
+        try:
+            server_done, challenge = server.next_challenge(response or b'')
+        except Reject as e:
+            show('S', str(e), modifier='ERROR')
+            return
 
     for i in range(10):
-        if done:
+        if server_done:
             show('S', challenge, modifier='OK')
-            report = client.wrap_up(challenge)
+            try:
+                report = client.wrap_up(challenge)
+            except Reject as e:
+                show('C', str(e), modifier='ERROR')
+                return
             show('C', report, modifier='HAPPY')
             print()
             break
         else:
             show('S', challenge)
-        response = client.respond(challenge or b'')
+        try:
+            response = client.respond(challenge or b'')
+        except Reject as e:
+            show('C', str(e), modifier='ERROR')
+            return
         show('C', response)
-        done, challenge = server.next_challenge(response or b'')
+        try:
+            server_done, challenge = server.next_challenge(response or b'')
+        except Reject as e:
+            show('S', str(e), modifier='ERROR')
     else:
         raise Exception('exchange takes too long')
 
