@@ -11,7 +11,6 @@ from framing import Mapi
 from pymonetdb.target import Target
 
 import mechanisms
-from mechanisms.classic import ClassicMechanism
 
 
 class ErrorMessage(Exception):
@@ -22,6 +21,12 @@ argparser = argparse.ArgumentParser()
 argparser.add_argument(
     'dburl',
     help='Database to connect to, as an URL',
+)
+argparser.add_argument(
+    '-m',
+    '--methods',
+    help='Comma separated list of allowed mechanisms',
+    type=lambda s: [m.strip().upper() for m in s.split(',')],
 )
 argparser.add_argument('-v', '--verbose', action='store_true')
 
@@ -234,8 +239,10 @@ def attempt_login(target: Target, mapi: Mapi, args):
 
     assert available_mechs_str is not None
     available_mechs = set(available_mechs_str.split(','))
+    if args.methods:
+        available_mechs &= set(args.methods)
     for mech in mechanisms.MECHANISMS:
-        if mech.wire_name in available_mechs and isinstance(mech, ClassicMechanism):
+        if mech.wire_name in available_mechs:
             break
     else:
         raise ErrorMessage(f'No supported authentication mechanism among {available_mechs_str}')
