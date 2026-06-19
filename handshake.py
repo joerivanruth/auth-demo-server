@@ -1,9 +1,11 @@
-import hashlib
 import logging
 import secrets
+from typing import Optional
 
-from credentials import CredStore, PLAIN
+from credentials import CredStore
 import framing
+import mechanisms
+from mechanisms import ClassicMechanism
 
 
 # ** [0] t=0.506s RECV HANDSHAKE (DATA) mapi_handshake(), line 469
@@ -18,11 +20,6 @@ import framing
 
 
 class Handshake:
-    hash_algorithms = [
-        algo
-        for algo in ['ripemd160', 'sha512', 'sha384', 'sha256', 'sha224', 'sha1']
-        if algo in hashlib.algorithms_available
-    ]
     obfuscation_algo = 'sha512'
     credstore: CredStore
     id: str
@@ -38,13 +35,9 @@ class Handshake:
         self.credstore = CredStore.default()
 
     def execute(self) -> bool:
-        return self.initial_handshake()
-
-    def initial_handshake(self) -> bool:
-        ini_nonce = secrets.token_urlsafe()
-        ini_nonce = ini_nonce[:10]  # shorten it for readability
-        algos = ','.join(self.hash_algorithms).upper()
-        challenge = f'{ini_nonce}:mserver:9:{algos}:LIT:{self.obfuscation_algo.upper()}:sql=6:BINARY=1:OOBINTR=1:CLIENTINFO:'
+        ini_nonce = secrets.token_urlsafe(20)
+        available_mechanisms = dict((m.wire_name, m) for m in mechanisms.MECHANISMS)
+        challenge = f'{ini_nonce}:mserver:9:{",".join(available_mechanisms.keys())}:LIT:{self.obfuscation_algo.upper()}:sql=6:BINARY=1:OOBINTR=1:CLIENTINFO:'
         try:
             self.conn.send(challenge)
         except BrokenPipeError:
@@ -60,46 +53,46 @@ class Handshake:
             logging.error(f'{self.id}: Too few response components: {response}')
             return False
         self.user = response_parts[1]
+        mech_and_payload = response_parts[2]
         self.dbname = response_parts[4]
 
-        err_msg = self.validate_initial_response(ini_nonce, response_parts[2])
-        if err_msg is not None:
-            err_msg = f'Classic authentication failed: {err_msg}'
-            logging.error(f'{self.id}: {err_msg}')
-            self.conn.send(f'!{err_msg}\n')
+        # parse {MECHNAME}PAYLOAD
+        if not mech_and_payload.startswith('{') or '}' not in mech_and_payload:
+            logging.error(f'{self.id}: invalid mechanism selection')
+            return False
+        mech_name, payload = mech_and_payload[1:].split('}', 1)
+        self.mech = available_mechanisms.get(mech_name)
+        if not self.mech:
+            logging.error(f'{self.id}: unsupported auth mechanism')
             return False
 
-        self.conn.send('')
-        return True
-
-    def validate_initial_response(self, nonce: str, hashed_response: str):
-        invalid_credentials = 'Invalid credentials'
-
-        if not hashed_response.startswith('{') or '}' not in hashed_response:
-            logging.error(f'{self.id}: invalid hashed response: {hashed_response}')
-            return 'invalid hashed response'
-        algo, client_finalhash = hashed_response[1:].split('}', 1)
-        algo = algo.lower()
-        if algo not in self.hash_algorithms:
-            logging.error(f'{self.id}: unsupported hash algo: {algo}')
-            return f'Unsupported hash algo: {algo}'
-
-        plain_password = self.credstore.get_last(self.user, PLAIN)
-        if plain_password is None:
-            logging.error(f'{self.id}: Unknown user: {self.user}')
-            return invalid_credentials
-        obfuscated_password = hashlib.new(
-            self.obfuscation_algo, data=bytes(plain_password, 'utf-8')
-        ).hexdigest()
-
-        hash_material = obfuscated_password + nonce
-        our_finalhash = hashlib.new(algo, data=bytes(hash_material, 'utf-8')).hexdigest()
-
-        if our_finalhash == client_finalhash:
-            return None
+        if isinstance(self.mech, mechanisms.ClassicMechanism):
+            err_msg = self.execute_classic(ini_nonce, payload)
         else:
-            logging.debug(
-                f'{self.id}: {algo=} {nonce=} {plain_password=} {obfuscated_password=}'
-            )
-            logging.debug(f'{self.id}: {our_finalhash=} {client_finalhash=}')
-            return invalid_credentials
+            err_msg = 'external auth not implemented yet'
+
+        if err_msg is not None:
+            logging.error(f'{self.id}: {err_msg}')
+            self.conn.send('!Authentication failed')
+            return False
+        else:
+            return True
+
+    def execute_classic(self, nonce: str, reply: str) -> Optional[str]:
+        assert isinstance(self.mech, ClassicMechanism)
+        ctx = self.mech.start_server(self.user, self.credstore, {})
+
+        # make sure to use the nonce that was sent to the client
+        bnonce = bytes(nonce, 'utf-8')
+        ctx.set_nonce(bnonce)
+        chal = ctx.initial_challenge()
+        assert bnonce == chal
+        try:
+            done, nchal = ctx.next_challenge(bytes(reply, 'utf-8'))
+            assert done
+            assert nchal is None
+        except mechanisms.Reject as e:
+            return str(e)
+
+        self.conn.send('')
+        return None

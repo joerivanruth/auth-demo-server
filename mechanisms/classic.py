@@ -51,6 +51,9 @@ class ClassicServer(ServerSide):
         self.password = password
         self.nonce = bytes(secrets.token_urlsafe(10), 'utf-8')
 
+    def set_nonce(self, nonce: bytes):
+        self.nonce = nonce
+
     def initial_challenge(self):
         return self.nonce
 

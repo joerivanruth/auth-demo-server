@@ -53,7 +53,14 @@ from mechanisms.plain import PlainMechanism
 from mechanisms.digest import DigestMechanism
 from mechanisms.classic import ClassicMechanism
 
-MECHANISMS = [PlainMechanism, DigestMechanism]
+MECHANISMS = [
+    DigestMechanism(),
+    ClassicMechanism('ripemd160', 'sha512'),
+    ClassicMechanism('sha256', 'sha512'),
+    PlainMechanism(),
+]
+
+__all__ = ['Mechanism', 'Reject', 'ClassicMechanism', 'PlainMechanism', 'DigestMechanism']
 
 have_gssapi = False
 try:
@@ -64,7 +71,5 @@ except ModuleNotFoundError:
 if have_gssapi:
     from mechanisms.naive_gssapi import NaiveGSSAPIMechanism
 
-    MECHANISMS.append(NaiveGSSAPIMechanism)
-
-
-__all__ = ['Mechanism', 'Reject', 'ClassicMechanism'] + [m.__name__ for m in MECHANISMS]
+    MECHANISMS.insert(0, NaiveGSSAPIMechanism())
+    __all__.append('NaiveGSSAPiMechanism')
