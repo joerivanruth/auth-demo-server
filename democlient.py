@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import argparse
+import codecs
 import logging
 import os
 import socket
@@ -11,6 +12,7 @@ from framing import Mapi
 from pymonetdb.target import Target
 
 import mechanisms
+from mechanisms.classic import ClassicMechanism
 
 
 class ErrorMessage(Exception):
@@ -247,6 +249,52 @@ def attempt_login(target: Target, mapi: Mapi, args):
     else:
         raise ErrorMessage(f'No supported authentication mechanism among {available_mechs_str}')
 
+    try:
+        if isinstance(mech, ClassicMechanism):
+            return attempt_login_classic(mech, target, mapi, nonce)
+        else:
+            return attempt_login_modern(mech, target, mapi)
+    except mechanisms.Reject as e:
+        raise ErrorMessage(str(e)) from None
+
+
+def attempt_login_modern(mech: ClassicMechanism, target: Target, mapi: Mapi):
+    ctx = mech.start_client(target)
+
+    response = f'{{{mech.wire_name}}}'
+    if mech.client_first:
+        # the first challenge is known to be empty and not really sent by the server
+        server_token = ctx.respond(b'')
+        response += '+' + server_token.hex()
+    reply = f'BIG:{target.user}:{response}:sql:{target.database}:'
+    mapi.send(reply)
+    
+    for i in range(10):
+        server_response = mapi.receive()
+        if server_response is None:
+            raise ErrorMessage('server closed the connection during login')
+        check_server_error(server_response)
+        if server_response.startswith('+'):
+            server_token = bytes.fromhex(server_response[1:].strip())        
+            client_token = ctx.respond(server_token)
+            reply = f'+{client_token.hex()}'
+            mapi.send(reply)
+        elif server_response.startswith('*'):
+            if server_response.startswith('*+'):
+                additional_data = bytes.fromhex(server_response[2:].strip())
+            else:
+                additional_data = None
+            report = ctx.wrap_up(additional_data)
+            logging.debug(f'HAPPY: {report}')
+            return ''
+        else:
+           raise ErrorMessage('server unexpectedly stopped authentication exchange')
+    else:
+        raise ErrorMessage('exchange takes too long')
+
+
+
+def attempt_login_classic(mech: ClassicMechanism, target: Target, mapi: Mapi, nonce: str):
     ctx = mech.start_client(target)
     response = str(ctx.respond(bytes(nonce, 'utf-8')), 'utf-8')
     reply = f'BIG:{target.user}:{{{mech.wire_name}}}{response}:sql:{target.database}:'

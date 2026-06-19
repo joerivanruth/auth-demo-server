@@ -29,6 +29,8 @@ argparser.add_argument(
     default='50000',
     help='[Host:]port to listen on, default is 50000',
 )
+argparser.add_argument('-k', '--keytab')
+argparser.add_argument('-P', '--principal')
 argparser.add_argument('-v', '--verbose', action='store_true')
 
 

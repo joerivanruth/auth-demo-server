@@ -69,7 +69,7 @@ class Handshake:
         if isinstance(self.mech, mechanisms.ClassicMechanism):
             err_msg = self.execute_classic(ini_nonce, payload)
         else:
-            err_msg = 'external auth not implemented yet'
+            err_msg = self.execute_modern(payload)
 
         if err_msg is not None:
             logging.error(f'{self.id}: {err_msg}')
@@ -77,6 +77,41 @@ class Handshake:
             return False
         else:
             return True
+
+    def execute_modern(self, payload: str) -> Optional[str]:
+        opts = {}
+        if self.args.keytab:
+            opts['keytab'] = self.args.keytab
+        if self.args.principal:
+            opts['principal'] = self.args.principal
+        ctx = self.mech.start_server(self.user, self.credstore, opts)
+
+        # send initial challenge to client and await reply
+        server_token = ctx.initial_challenge()
+        if self.mech.client_first and payload:
+            assert server_token == b''
+            client_token_str = payload
+        else:
+            self.conn.send('+' + server_token.hex())
+            client_token_str = self.conn.receive() or ''
+
+        # process the reply and send a new challenge if necessary
+        for i in range(10):
+            if not client_token_str.startswith('+'):
+                return 'client unexpectedly stopped authenticating'
+            client_token = bytes.fromhex(client_token_str[1:])
+            server_done, challenge = ctx.next_challenge(client_token)
+            challenge_str = '*' if server_done else ''
+            if challenge:
+                challenge_str += '+' + challenge.hex()
+            self.conn.send(challenge_str)
+            if server_done:
+                break
+            client_token_str = self.conn.receive() or ''
+        else:
+            return 'exchange takes too long'
+
+        return None
 
     def execute_classic(self, nonce: str, reply: str) -> Optional[str]:
         assert isinstance(self.mech, ClassicMechanism)
