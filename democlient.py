@@ -1,7 +1,5 @@
 #!/usr/bin/env python3
 
-import hashlib
-
 import argparse
 import logging
 import os
@@ -11,6 +9,9 @@ from typing import Optional, Tuple
 
 from framing import Mapi
 from pymonetdb.target import Target
+
+import mechanisms
+from mechanisms.classic import ClassicMechanism
 
 
 class ErrorMessage(Exception):
@@ -219,26 +220,29 @@ def attempt_login(target: Target, mapi: Mapi, args):
     if not server_challenge:
         raise ErrorMessage('server immediately closed the connection')
     assert server_challenge.endswith(':')
-    parts = server_challenge.split(':')[:-1] + 10 * [None]
-    [nonce, servertype, proto, hash_algos, endian, obfusc_algo, *rest] = parts
+    parts = server_challenge.split(':')[:-1]
+    if len(parts) < 3:
+        raise ErrorMessage('incomplete challenge')
+    [nonce, servertype, proto, available_mechs_str, endian, obfusc_algo, *rest] = parts
     if proto != '9':
         raise ErrorMessage('Only protocol version 9 is supported, not {proto}')
-    assert nonce is not None
 
     if servertype == 'merovingian':
-        user = 'merovingian'
-        plain_password_bytes = b'merovingian'
+        target = target.clone()
+        target.user = 'merovingian'
+        target.password = 'merovingian'
+
+    assert available_mechs_str is not None
+    available_mechs = set(available_mechs_str.split(','))
+    for mech in mechanisms.MECHANISMS:
+        if mech.wire_name in available_mechs and isinstance(mech, ClassicMechanism):
+            break
     else:
-        user = target.user
-        plain_password_bytes = bytes(target.password, 'utf-8')
+        raise ErrorMessage(f'No supported authentication mechanism among {available_mechs_str}')
 
-    obfuscated_password = pick_hasher(obfusc_algo, plain_password_bytes).hexdigest()
-    hasher = pick_hasher(hash_algos)
-    hasher.update(bytes(obfuscated_password, 'utf-8'))
-    hasher.update(bytes(nonce, 'utf-8'))
-    pwhash = f'{{{hasher.name.upper()}}}{hasher.hexdigest()}'
-
-    reply = f'BIG:{user}:{pwhash}:sql:{target.database}:'
+    ctx = mech.start_client(target)
+    response = str(ctx.respond(bytes(nonce, 'utf-8')), 'utf-8')
+    reply = f'BIG:{target.user}:{{{mech.wire_name}}}{response}:sql:{target.database}:'
     mapi.send(reply)
 
     server_response = mapi.receive()
@@ -247,17 +251,6 @@ def attempt_login(target: Target, mapi: Mapi, args):
     check_server_error(server_response)
     first_line = server_response.strip().split('\n', 1)[0]
     return first_line
-
-
-def pick_hasher(comma_separated_algos, initial_content=None):
-    # we should really pick our own order
-    for a in comma_separated_algos.lower().split(','):
-        if a in hashlib.algorithms_available:
-            hasher = hashlib.new(a)
-            if initial_content is not None:
-                hasher.update(initial_content)
-            return hasher
-    raise ErrorMessage(f'Unsupported hash algorithm: {comma_separated_algos}')
 
 
 def check_server_error(msg):

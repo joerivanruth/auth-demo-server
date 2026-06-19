@@ -53,10 +53,10 @@ from mechanisms.plain import PlainMechanism
 from mechanisms.digest import DigestMechanism
 from mechanisms.classic import ClassicMechanism
 
-MECHANISMS = [
-    DigestMechanism(),
+MECHANISMS: list[Mechanism] = [
     ClassicMechanism('ripemd160', 'sha512'),
     ClassicMechanism('sha256', 'sha512'),
+    DigestMechanism(),
     PlainMechanism(),
 ]
 
