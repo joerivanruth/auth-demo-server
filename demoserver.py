@@ -125,7 +125,7 @@ def interact_sql(conn: Mapi, hs: Handshake, sql: str) -> bool:
         return True
 
     # democlient uses this, also nice for interactive tests
-    m = re.match('^SELECT\s+(\d+)\s*$', sql, re.I)
+    m = re.match(r'^SELECT\s+(\d+)\s*$', sql, re.I)
     if m:
         rs = ResultSet('.%2', **{'%2': 'int'})
         rs.add(**{'%2': int(m.group(1))})
