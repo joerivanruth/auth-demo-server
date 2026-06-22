@@ -244,6 +244,7 @@ def attempt_login(target: Target, mapi: Mapi, args):
         available_mechs &= set(args.methods)
     for mech in mechanisms.MECHANISMS:
         if mech.wire_name in available_mechs:
+            logging.debug(f'Using {mech.wire_name} authentication')
             break
     else:
         raise ErrorMessage(f'No supported authentication mechanism among {available_mechs_str}')

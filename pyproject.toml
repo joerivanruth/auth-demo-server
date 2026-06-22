@@ -6,6 +6,7 @@ readme = "README.md"
 requires-python = ">=3.13"
 dependencies = [
     "gssapi>=1.11.1",
+    "scramp>=1.4.9",
 ]
 
 [tool.ruff]

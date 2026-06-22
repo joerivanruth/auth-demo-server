@@ -1,5 +1,6 @@
 from abc import ABC, abstractmethod
 import importlib
+import sys
 from typing import Any, Optional, Tuple
 
 from pymonetdb.target import Target
@@ -62,14 +63,21 @@ MECHANISMS: list[Mechanism] = [
 
 __all__ = ['Mechanism', 'Reject', 'ClassicMechanism', 'PlainMechanism', 'DigestMechanism']
 
-have_gssapi = False
-try:
-    importlib.import_module('gssapi')
-    have_gssapi = True
-except ModuleNotFoundError:
-    pass
-if have_gssapi:
-    from mechanisms.naive_gssapi import NaiveGSSAPIMechanism
 
-    MECHANISMS.insert(0, NaiveGSSAPIMechanism())
-    __all__.append('NaiveGSSAPiMechanism')
+def prepend_mechanism_if_available(reqmods: list[str], modname: str, classname: str):
+    assert isinstance(reqmods, list)
+    for m in reqmods:
+        try:
+            importlib.import_module(m)
+        except ModuleNotFoundError:
+            return
+    mod = importlib.import_module(modname)
+    constructor = getattr(mod, classname)
+    mech = constructor()
+    setattr(sys.modules[__name__], constructor.__name__, constructor)
+    MECHANISMS.insert(0, mech)
+    __all__.append(constructor.__name__)
+
+
+prepend_mechanism_if_available(['scramp'], 'mechanisms.naive_scram', 'NaiveScramMechanism')
+prepend_mechanism_if_available(['gssapi'], 'mechanisms.naive_gssapi', 'NaiveGSSAPIMechanism')
