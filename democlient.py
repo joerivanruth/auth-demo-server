@@ -1,7 +1,6 @@
 #!/usr/bin/env python3
 
 import argparse
-import codecs
 import logging
 import os
 import socket
@@ -258,7 +257,7 @@ def attempt_login(target: Target, mapi: Mapi, args):
         raise ErrorMessage(str(e)) from None
 
 
-def attempt_login_modern(mech: ClassicMechanism, target: Target, mapi: Mapi):
+def attempt_login_modern(mech: mechanisms.Mechanism, target: Target, mapi: Mapi):
     ctx = mech.start_client(target)
 
     response = f'{{{mech.wire_name}}}'
@@ -268,14 +267,14 @@ def attempt_login_modern(mech: ClassicMechanism, target: Target, mapi: Mapi):
         response += '+' + server_token.hex()
     reply = f'BIG:{target.user}:{response}:sql:{target.database}:'
     mapi.send(reply)
-    
+
     for i in range(10):
         server_response = mapi.receive()
         if server_response is None:
             raise ErrorMessage('server closed the connection during login')
         check_server_error(server_response)
         if server_response.startswith('+'):
-            server_token = bytes.fromhex(server_response[1:].strip())        
+            server_token = bytes.fromhex(server_response[1:].strip())
             client_token = ctx.respond(server_token)
             reply = f'+{client_token.hex()}'
             mapi.send(reply)
@@ -288,10 +287,9 @@ def attempt_login_modern(mech: ClassicMechanism, target: Target, mapi: Mapi):
             logging.debug(f'HAPPY: {report}')
             return ''
         else:
-           raise ErrorMessage('server unexpectedly stopped authentication exchange')
+            raise ErrorMessage('server unexpectedly stopped authentication exchange')
     else:
         raise ErrorMessage('exchange takes too long')
-
 
 
 def attempt_login_classic(mech: ClassicMechanism, target: Target, mapi: Mapi, nonce: str):

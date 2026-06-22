@@ -1,3 +1,4 @@
+import argparse
 import logging
 import secrets
 from typing import Optional
@@ -5,7 +6,7 @@ from typing import Optional
 from credentials import CredStore
 import framing
 import mechanisms
-from mechanisms import ClassicMechanism
+from mechanisms import ClassicMechanism, Mechanism
 
 
 # ** [0] t=0.506s RECV HANDSHAKE (DATA) mapi_handshake(), line 469
@@ -24,11 +25,12 @@ class Handshake:
     credstore: CredStore
     id: str
     conn: framing.Mapi
-    args = None
+    args: argparse.Namespace
     user: str
     dbname: str
+    mech: Optional[Mechanism]
 
-    def __init__(self, conn, args):
+    def __init__(self, conn, args: argparse.Namespace):
         self.id = conn.id
         self.conn = conn
         self.args = args
@@ -79,6 +81,7 @@ class Handshake:
             return True
 
     def execute_modern(self, payload: str) -> Optional[str]:
+        assert self.mech
         opts = {}
         if self.args.keytab:
             opts['keytab'] = self.args.keytab
@@ -114,6 +117,7 @@ class Handshake:
         return None
 
     def execute_classic(self, nonce: str, reply: str) -> Optional[str]:
+        assert self.mech
         assert isinstance(self.mech, ClassicMechanism)
         ctx = self.mech.start_server(self.user, self.credstore, {})
 
