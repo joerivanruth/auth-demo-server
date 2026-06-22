@@ -6,7 +6,7 @@ from typing import Optional
 from credentials import CredStore
 import framing
 import mechanisms
-from mechanisms import ClassicMechanism, Mechanism, Reject
+from mechanisms import ClassicMechanism, Mechanism, Reject, ServerSide
 
 
 # ** [0] t=0.506s RECV HANDSHAKE (DATA) mapi_handshake(), line 469
@@ -26,9 +26,10 @@ class Handshake:
     id: str
     conn: framing.Mapi
     args: argparse.Namespace
-    user: str
     dbname: str
     mech: Optional[Mechanism]
+    server_side: Optional[ServerSide]
+    effective_user: Optional[str]
 
     def __init__(self, conn, args: argparse.Namespace):
         self.id = conn.id
@@ -54,7 +55,7 @@ class Handshake:
         if len(response_parts) < 5:
             logging.error(f'{self.id}: Too few response components: {response}')
             return False
-        self.user = response_parts[1]
+        user = response_parts[1]
         mech_and_payload = response_parts[2]
         self.dbname = response_parts[4]
 
@@ -70,7 +71,7 @@ class Handshake:
 
         try:
             if isinstance(self.mech, mechanisms.ClassicMechanism):
-                err_msg = self.execute_classic(ini_nonce, payload)
+                err_msg = self.execute_classic(ini_nonce, user, payload)
             else:
                 err_msg = self.execute_modern(payload)
         except Reject as e:
@@ -82,6 +83,13 @@ class Handshake:
             self.conn.send('!Authentication failed')
             return False
         else:
+            assert (
+                self.server_side
+            )  # should have been set by either execute_classic or _modern above
+            authcid = self.server_side.authcid
+            authzid = self.server_side.authzid
+            mech = self.mech.wire_name
+            logging.debug(f'{self.id}: Authenticated {mech}: {authcid=} {authzid=}')
             return True
 
     def execute_modern(self, payload: str) -> Optional[str]:
@@ -91,7 +99,7 @@ class Handshake:
             opts['keytab'] = self.args.keytab
         if self.args.principal:
             opts['principal'] = self.args.principal
-        ctx = self.mech.start_server(self.user, self.credstore, opts)
+        ctx = self.mech.start_server(credstore=self.credstore, opts=opts)
 
         # send initial challenge to client and await reply
         server_token = ctx.initial_challenge()
@@ -118,12 +126,14 @@ class Handshake:
         else:
             return 'exchange takes too long'
 
+        self.server_side = ctx
         return None
 
-    def execute_classic(self, nonce: str, reply: str) -> Optional[str]:
+    def execute_classic(self, nonce: str, user: str, reply: str) -> Optional[str]:
         assert self.mech
         assert isinstance(self.mech, ClassicMechanism)
-        ctx = self.mech.start_server(self.user, self.credstore, {})
+        ctx = self.mech.start_server(credstore=self.credstore, opts={})
+        ctx.set_user(user)
 
         # make sure to use the nonce that was sent to the client
         bnonce = bytes(nonce, 'utf-8')
@@ -138,4 +148,5 @@ class Handshake:
             return str(e)
 
         self.conn.send('')
+        self.server_side = ctx
         return None

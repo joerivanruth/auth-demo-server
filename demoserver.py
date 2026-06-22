@@ -6,9 +6,12 @@ import os
 import re
 import socket
 import threading
+from typing import Optional
 
+from credentials import PRINCIPAL
 from framing import Mapi, ResultSet
 from handshake import Handshake
+from mechanisms.naive_gssapi import NaiveGSSAPIMechanism
 
 
 def parse_sockaddr(s):
@@ -62,14 +65,54 @@ def handle_connection(sock: socket.socket, id: str, args):
     try:
         conn = Mapi(sock, id)
         hs = Handshake(conn, args)
-        if hs.execute():
-            interact(conn, hs)
+        if not hs.execute():
+            return
+        user = authorize_connection(id, hs)
+        if not user:
+            return
+        hs.effective_user = user
+        logging.debug(f"{id}: Authorized to connect as '{user}'")
+        interact(conn, hs)
     finally:
         logging.info(f'{id}: Closing')
         try:
             sock.close()
         except IOError:
             pass
+
+
+def authorize_connection(id: str, hs: Handshake) -> Optional[str]:
+    assert hs.server_side
+    authcid = hs.server_side.authcid
+    authzid = hs.server_side.authzid
+    assert authcid
+
+    # authcid is mechanism-specific, often one of our user names
+    # such as 'monetdb' but it can also be a Kerberos principal
+    # 'jvr@EXAMPLE.COM'.
+
+    # authzid is monetdb-specific. It's a SQL user name.
+    # It's usually left empty. We only support empty and
+    # any value we could have chosen if it would have
+    # been empty.
+
+    # Handle the Kerberos case separately
+    if isinstance(hs.mech, NaiveGSSAPIMechanism):
+        candidates = set(
+            cred.user
+            for cred in hs.credstore.list()
+            if cred.kind == PRINCIPAL and cred.password == authcid
+        )
+    else:
+        all_users = set(hs.credstore._creds.keys())
+        candidates = set([authcid]) & all_users
+
+    if authzid in candidates:
+        return authzid
+    elif not authzid and len(candidates) == 1:
+        return list(candidates)[0]
+    else:
+        return None
 
 
 def interact(conn: Mapi, hs: Handshake):
@@ -115,7 +158,8 @@ def interact_sql(conn: Mapi, hs: Handshake, sql: str) -> bool:
         if 'monet_release' in requested:
             rs.add(name='raw_strings', value='false')
         if m.group(2):
-            rs.add(name='current_user', value=hs.user)
+            assert hs.effective_user
+            rs.add(name='current_user', value=hs.effective_user)
         conn.send(rs.render())
         return True
 

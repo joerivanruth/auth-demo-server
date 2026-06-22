@@ -23,8 +23,8 @@ class NaiveScramMechanism(Mechanism):
         return NaiveScramClient(target.user, target.password)
 
     @staticmethod
-    def start_server(user, credstore: CredStore, opts: dict[str, Any]):
-        return NaiveScramServer(user, credstore)
+    def start_server(credstore: CredStore, opts: dict[str, Any]):
+        return NaiveScramServer(credstore)
 
 
 class NaiveScramClient(ClientSide):
@@ -86,13 +86,11 @@ _mech = scramp.ScramMechanism('SCRAM-SHA-256')
 
 
 class NaiveScramServer(ServerSide):
-    user: str
     credstore: CredStore
     server: scramp.core.ScramServer
     initial: bool
 
-    def __init__(self, user: str, credstore: CredStore):
-        self.user = user
+    def __init__(self, credstore: CredStore):
         self.credstore = credstore
         try:
             self.server = _mech.make_server(self.auth_fn)
@@ -113,16 +111,13 @@ class NaiveScramServer(ServerSide):
             if self.initial:
                 self.server.set_client_first(client_token)
                 server_token = self.server.get_server_first()
+                self.authzid = client_token.split(',', 2)[1] or None
                 self.initial = False
                 return False, bytes(server_token, 'utf-8')
             else:
                 self.server.set_client_final(client_token)
                 server_token = self.server.get_server_final()
-                # no exception to scram is happy. does the user name match?
-                if self.server.user != self.user:
-                    raise Reject(
-                        f"SCRAM: scram user name '{self.server.user}' does not match requested user '{self.user}'"
-                    )
+                self.authcid = self.server.user
                 return True, bytes(server_token, 'utf-8')
         except scramp.ScramException as e:
             raise Reject(f'SCRAM: {e}') from None

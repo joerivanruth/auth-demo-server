@@ -18,6 +18,9 @@ class ClientSide:
 
 
 class ServerSide:
+    authcid: Optional[str]
+    authzid: Optional[str]
+
     @abstractmethod
     def initial_challenge(self) -> bytes:
         raise NotImplementedError()
@@ -32,11 +35,11 @@ class Mechanism(ABC):
     client_first: bool
 
     @abstractmethod
-    def start_client(self, target: Target) -> ClientSide:
+    def start_client(self, *, target: Target) -> ClientSide:
         raise NotImplementedError()
 
     @abstractmethod
-    def start_server(self, user: str, credstore: CredStore, opts: dict[str, Any]) -> ServerSide:
+    def start_server(self, *, credstore: CredStore, opts: dict[str, Any]) -> ServerSide:
         raise NotImplementedError()
 
 

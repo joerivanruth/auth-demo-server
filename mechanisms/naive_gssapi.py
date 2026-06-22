@@ -5,7 +5,7 @@ import gssapi
 from gssapi.raw import GSSError
 from pymonetdb.target import Target
 
-from credentials import PRINCIPAL, CredStore
+from credentials import CredStore
 from mechanisms import ClientSide, Mechanism, Reject, ServerSide
 
 
@@ -19,7 +19,7 @@ class NaiveGSSAPIMechanism(Mechanism):
         return NaiveGSSAPIClient(server_principal)
 
     @staticmethod
-    def start_server(user, credstore: CredStore, opts: dict[str, Any]):
+    def start_server(credstore: CredStore, opts: dict[str, Any]):
         principal = opts.get('principal')
         if not principal:
             fqdn = socket.getfqdn()
@@ -35,8 +35,7 @@ class NaiveGSSAPIMechanism(Mechanism):
         )
         server_creds = gssapi.Credentials(acquire_result.creds)
 
-        acceptable_principals = credstore.get_all(user, PRINCIPAL)
-        return NaiveGSSAPIServer(user, server_creds, acceptable_principals)
+        return NaiveGSSAPIServer(server_creds, credstore)
 
 
 def target_lookup(target: Target, key: str) -> Optional[Any]:
@@ -100,17 +99,13 @@ class NaiveGSSAPIClient(ClientSide):
 
 
 class NaiveGSSAPIServer(ServerSide):
-    user: str
     server_creds: gssapi.Credentials
-    acceptable_principals: list[str]
+    credstore: CredStore
     ctx: Optional[gssapi.SecurityContext] = None
 
-    def __init__(
-        self, user: str, server_creds: gssapi.Credentials, acceptable_principals: list[str]
-    ):
-        self.user = user
+    def __init__(self, server_creds: gssapi.Credentials, credstore: CredStore):
         self.server_creds = server_creds
-        self.acceptable_principals = acceptable_principals[:]
+        self.credstore = credstore
 
     def initial_challenge(self):
         return b''
@@ -125,13 +120,7 @@ class NaiveGSSAPIServer(ServerSide):
         except GSSError as e:
             raise Reject(str(e)) from None
         if self.ctx.complete:
-            client_principal = self.ctx.initiator_name.canonicalize(gssapi.MechType.kerberos)
-            for p in self.acceptable_principals:
-                nm = gssapi.Name(p, gssapi.NameType.kerberos_principal)
-                canon = nm.canonicalize(gssapi.MechType.kerberos)
-                if canon == client_principal:
-                    break
-            else:
-                msg = f"User '{self.user}' cannot login with principal {client_principal}"
-                raise Reject(msg)
+            canonical_client = self.ctx.initiator_name.canonicalize(gssapi.MechType.kerberos)
+            self.authcid = str(canonical_client)
+            self.authzid = None
         return self.ctx.complete, server_token

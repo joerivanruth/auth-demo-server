@@ -259,14 +259,14 @@ def attempt_login(target: Target, mapi: Mapi, args):
 
 
 def attempt_login_modern(mech: mechanisms.Mechanism, target: Target, mapi: Mapi):
-    ctx = mech.start_client(target)
+    ctx = mech.start_client(target=target)
 
     response = f'{{{mech.wire_name}}}'
     if mech.client_first:
         # the first challenge is known to be empty and not really sent by the server
         server_token = ctx.respond(b'')
         response += '+' + server_token.hex()
-    reply = f'BIG:{target.user}:{response}:sql:{target.database}:'
+    reply = f'BIG::{response}:sql:{target.database}:'  # note user field left empty
     mapi.send(reply)
 
     for i in range(10):
@@ -303,6 +303,7 @@ def attempt_login_classic(mech: ClassicMechanism, target: Target, mapi: Mapi, no
     if server_response is None:
         raise ErrorMessage('server closed the connection during login')
     check_server_error(server_response)
+    logging.debug('HAPPY')
     first_line = server_response.strip().split('\n', 1)[0]
     return first_line
 

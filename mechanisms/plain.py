@@ -16,32 +16,45 @@ class PlainMechanism(Mechanism):
 
     @staticmethod
     def start_client(target: Target):
-        return PlainClient(target.password)
+        return PlainClient(target.user, target.password)
 
     @staticmethod
-    def start_server(user, credstore: CredStore, opts: dict[str, Any]):
-        return PlainServer(credstore.get_last(user, PLAIN))
+    def start_server(credstore: CredStore, opts: dict[str, Any]):
+        return PlainServer(credstore)
 
 
 class PlainClient(ClientSide):
-    def __init__(self, password: str):
+    def __init__(self, user: str, password: str):
+        self.user = user
         self.password = password
 
     def respond(self, token):
         assert token == b''
-        return bytes(self.password, 'utf-8')
+        packet = f'\x00{self.user or ""}\x00{self.password or ""}'
+        return bytes(packet, 'utf-8')
 
 
 class PlainServer(ServerSide):
-    def __init__(self, password: Optional[str]):
-        self.password = password
+    credstore: CredStore
+
+    def __init__(self, credstore: CredStore):
+        self.credstore = credstore
 
     def initial_challenge(self):
         return b''
 
     def next_challenge(self, token) -> Tuple[bool, Optional[bytes]]:
-        password = str(token, 'utf-8')
-        if password == self.password:
+        packet = str(token, 'utf-8')
+        parts = packet.split('\x00')
+        if len(parts) != 3:
+            raise invalid_credentials()
+        [authzid, authcid, password] = parts
+
+        server_password = self.credstore.get_last(authcid, PLAIN)
+
+        if password == server_password:
+            self.authcid = authcid
+            self.authzid = authzid or None
             return True, None
         else:
             raise invalid_credentials()

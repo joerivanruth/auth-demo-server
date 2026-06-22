@@ -17,10 +17,11 @@ class ClassicMechanism(Mechanism):
         self.obfuscation_algo = obfuscation_algo
 
     def start_client(self, target):
+        # user name has already been sent, isn't used here anymore
         return ClassicClient(self, target.password)
 
-    def start_server(self, user, credstore: CredStore, opts: dict[str, Any]):
-        return ClassicServer(self, credstore.get_last(user, PLAIN))
+    def start_server(self, *, credstore: CredStore, opts: dict[str, Any]):
+        return ClassicServer(self, credstore)
 
     def squish(self, nonce: bytes, password: str) -> bytes:
         obfuscated = hashlib.new(self.obfuscation_algo, bytes(password, 'utf-8')).hexdigest()
@@ -43,27 +44,35 @@ class ClassicClient(ClientSide):
 
 class ClassicServer(ServerSide):
     mech: ClassicMechanism
-    password: Optional[str]
-    nonce: bytes
+    credstore: CredStore
+    nonce: Optional[bytes]
 
-    def __init__(self, mech: ClassicMechanism, password: Optional[str]):
+    def __init__(self, mech: ClassicMechanism, credstore: CredStore):
         self.mech = mech
-        self.password = password
-        self.nonce = bytes(secrets.token_urlsafe(10), 'utf-8')
+        self.credstore = credstore
+        self.nonce = None
 
     def set_nonce(self, nonce: bytes):
         self.nonce = nonce
+
+    def set_user(self, user: str):
+        self.authcid = user
 
     def initial_challenge(self):
         return self.nonce
 
     def next_challenge(self, token) -> Tuple[bool, Optional[bytes]]:
-        if self.password is None:
-            expected = None
-        else:
-            expected = self.mech.squish(self.nonce, self.password)
+        assert self.authcid
 
+        if self.nonce is None:
+            # we get to pick the nonce, in real life it will usually
+            # have been set with set_nonce()
+            self.nonce = bytes(secrets.token_urlsafe(10), 'utf-8')
+
+        password = self.credstore.get_last(self.authcid, PLAIN)
+        expected = self.mech.squish(self.nonce, password) if password else None
         if token == expected:
+            self.authzid = None
             return True, None
         else:
             raise invalid_credentials()

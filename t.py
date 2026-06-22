@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 
 import os
+import secrets
 from typing import Any, Optional
 
 from pymonetdb.target import Target
@@ -8,6 +9,7 @@ from pymonetdb.target import Target
 from credentials import CredStore
 from mechanisms import Mechanism, Reject
 import mechanisms
+from mechanisms.classic import ClassicServer
 
 
 def show(side: str, payload: Optional[bytes | str], modifier=None):
@@ -37,9 +39,8 @@ def dialogue(
 ):
     assert isinstance(mech, Mechanism), Mechanism
     client_opts = client_opts or {}
-    adjusted_server_opts = dict(keytab=os.path.expanduser('~/monetdb.keytab')) | (
-        server_opts or {}
-    )
+    adjusted_server_opts = dict(keytab=os.path.expanduser('~/monetdb.keytab'))
+    adjusted_server_opts |= server_opts or {}
 
     target = Target()
     target.parse('monetdb://localhost.:55000/demo')
@@ -51,15 +52,18 @@ def dialogue(
     credlist = list(credstore.list())
     print(f'Cred store has {len(credlist)} items')
     for cred in credlist:
-        print(f'- {cred.user} {cred.kind}={cred.password}')
+        print(f'- user {cred.user} has {cred.kind}={cred.password}')
 
     try:
-        client = mech.start_client(target)
+        client = mech.start_client(target=target)
     except Reject as e:
         show('C', str(e), modifier=f'{mech.wire_name} ERROR')
         return
     try:
-        server = mech.start_server(target.user, credstore, adjusted_server_opts)
+        server = mech.start_server(credstore=credstore, opts=adjusted_server_opts)
+        if isinstance(server, ClassicServer):
+            server.set_nonce(bytes(secrets.token_urlsafe(20), 'utf-8'))
+            server.set_user(target.user)
         challenge: Optional[bytes] = server.initial_challenge()
         server_done = False
     except Reject as e:
@@ -79,7 +83,7 @@ def dialogue(
             return
     else:
         response = None
-    show('C', response, modifier=f"Request {mech.wire_name} for user '{target.user}'")
+    show('C', response, modifier=f"Request {mech.wire_name}'")
     if mech.client_first:
         try:
             server_done, challenge = server.next_challenge(response or b'')
@@ -89,7 +93,10 @@ def dialogue(
 
     for i in range(10):
         if server_done:
-            show('S', challenge, modifier='OK')
+            authcid = server.authcid
+            authzid = server.authzid
+            show('S', challenge, modifier=f'OK {authcid=} {authzid=}')
+            assert authcid is not None
             try:
                 report = client.wrap_up(challenge)
             except Reject as e:
@@ -117,5 +124,5 @@ def dialogue(
 dialogue(mechanisms.PlainMechanism())
 dialogue(mechanisms.NaiveDigestMechanism())
 dialogue(mechanisms.ClassicMechanism('sha256', 'sha512'))
-dialogue(mechanisms.NaiveGSSAPIMechanism())  # type: ignore
+# dialogue(mechanisms.NaiveGSSAPIMechanism())  # type: ignore
 dialogue(mechanisms.NaiveScramMechanism())  # type: ignore

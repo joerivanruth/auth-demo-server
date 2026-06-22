@@ -2,7 +2,7 @@ from collections import defaultdict
 from dataclasses import dataclass
 import getpass
 import importlib
-from typing import Optional
+from typing import Generator, Optional
 
 
 PLAIN = 'plain'
@@ -38,7 +38,7 @@ class CredStore:
         else:
             return answers[-1]
 
-    def list(self):
+    def list(self) -> Generator[Cred, None, None]:
         for u, kps in self._creds.items():
             for k, ps in kps.items():
                 for p in ps:
