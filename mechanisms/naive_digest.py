@@ -6,22 +6,22 @@ from credentials import PLAIN, CredStore
 from mechanisms import ClientSide, Mechanism, ServerSide, invalid_credentials
 
 
-class DigestMechanism(Mechanism):
-    wire_name = 'DIGEST'
+class NaiveDigestMechanism(Mechanism):
+    wire_name = 'NAIVE_DIGEST'
     client_first = False
 
     def start_client(self, target):
-        return DigestClient(target.password)
+        return NaiveDigestClient(target.password)
 
     def start_server(self, user, credstore: CredStore, opts: dict[str, Any]):
-        return DigestServer(credstore.get_last(user, PLAIN))
+        return NaiveDigestServer(credstore.get_last(user, PLAIN))
 
 
 def squish(nonce: bytes, password: str) -> bytes:
     return hashlib.sha256(nonce + bytes(password, 'utf-8')).digest()
 
 
-class DigestClient(ClientSide):
+class NaiveDigestClient(ClientSide):
     def __init__(self, password: str):
         self.password = password
 
@@ -29,7 +29,7 @@ class DigestClient(ClientSide):
         return squish(token, self.password)
 
 
-class DigestServer(ServerSide):
+class NaiveDigestServer(ServerSide):
     nonce: bytes
     expected: Optional[bytes]
 

@@ -51,17 +51,17 @@ def invalid_credentials():
 # ruff: disable[E402]
 from credentials import CredStore
 from mechanisms.plain import PlainMechanism
-from mechanisms.digest import DigestMechanism
+from mechanisms.naive_digest import NaiveDigestMechanism
 from mechanisms.classic import ClassicMechanism
 
 MECHANISMS: list[Mechanism] = [
     ClassicMechanism('ripemd160', 'sha512'),
     ClassicMechanism('sha256', 'sha512'),
-    DigestMechanism(),
+    NaiveDigestMechanism(),
     PlainMechanism(),
 ]
 
-__all__ = ['Mechanism', 'Reject', 'ClassicMechanism', 'PlainMechanism', 'DigestMechanism']
+__all__ = ['Mechanism', 'Reject', 'ClassicMechanism', 'PlainMechanism', 'NaiveDigestMechanism']
 
 
 def prepend_mechanism_if_available(reqmods: list[str], modname: str, classname: str):
