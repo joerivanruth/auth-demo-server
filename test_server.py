@@ -12,6 +12,8 @@ import time
 from typing import Tuple
 from unittest import SkipTest, TestCase
 
+import pytest
+
 # This module contains tests that verify that demoserver can impersonate
 # mserver5 well enough for mclient, pymonetdb and monetdb-jdbc to be able to
 # connect.
@@ -117,7 +119,7 @@ def running_demoserver():
         proc.kill()
 
 
-class PymonetdbTests(TestCase):
+class DemoServerTests(TestCase):
     def test_pymonetdb(self):
         """Demoserver should be able to accept connections from pymonetdb"""
 
@@ -198,7 +200,9 @@ class PymonetdbTests(TestCase):
             retcode = mclient.wait(timeout=3)
             self.assertEqual(0, retcode, 'jdbcclient should have exited with status 0')
 
-    def test_democlient(self):
-        with running_demoserver() as url:
-            cmd = [sys.executable, 'democlient.py', '-v', url]
-            subprocess.check_call(cmd)
+
+@pytest.mark.parametrize('mech', ['RIPEMD160', 'SHA256', 'PLAIN', 'NAIVE_DIGEST'])
+def test_democlient(mech: str):
+    with running_demoserver() as url:
+        cmd = [sys.executable, 'democlient.py', '-v', url, '-m', mech]
+        subprocess.check_call(cmd)
