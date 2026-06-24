@@ -19,7 +19,7 @@ jobs:
         run: pip3 install --user --upgrade pymonetdb cryptography pytest
 
       - name: Run pytest
-        run: CLASSPATH=jdbcclient.jre8.jar pytest -v
+        run: FORCE_TESTS=most CLASSPATH=jdbcclient.jre8.jar pytest -v
 
       - name: Start MonetDB
         run: |
