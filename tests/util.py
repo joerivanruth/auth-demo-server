@@ -6,6 +6,7 @@ import subprocess
 import sys
 import time
 from typing import Tuple
+import urllib.parse
 
 import pytest
 
@@ -23,8 +24,15 @@ JDBCCLIENT = 'org.monetdb.client.JdbcClient'
 # Allow to set path to mclient using env var
 MCLIENT = os.getenv('MCLIENT', 'mclient')
 
-# Kerberos tests need a keytab to be available
+# Kerberos tests need a keytab to be available.
+# Optionally, the server principal can also be set.
 KEYTAB = os.getenv('TEST_KEYTAB', None)
+SERVER_PRINCIPAL = os.getenv('TEST_SERVER_PRINCIPAL', None)
+
+# Password entries to use in demoserver. If set must include
+# monetdb=plain:monetdb and for Kerberos also
+# monetdb=principal:USERNAME@REALM.
+TEST_USERS = [ cred for cred in os.getenv('TEST_USERS', '').split(',') if cred ] or None
 
 HAVE_PTY_MODULE = 'pymonetdb' in FORCE_TESTS
 try:
@@ -91,11 +99,23 @@ def running_demoserver():
     with socket.create_server(address=(listen_host, 0), family=socket.AF_INET) as sock:
         ignored, listen_port = sock.getsockname()
     listen_address = f'{listen_host}:{listen_port}'
-    url = f'monetdb://{listen_host}:{listen_port}/demo?user=monetdb&password=monetdb'
-    krb_args = ['-k', KEYTAB] if HAVE_KERBEROS else []
+    urlparams = dict(user='monetdb', password='monetdb')
+    if HAVE_KERBEROS:
+        assert KEYTAB
+        krb5_args = ['-k', KEYTAB]
+        if SERVER_PRINCIPAL:
+            krb5_args += ['-P', SERVER_PRINCIPAL]
+            urlparams['server_principal'] = SERVER_PRINCIPAL
+        print(TEST_USERS, file=sys.stderr)
+        if TEST_USERS:
+            for cred in TEST_USERS:
+                krb5_args += ['-c', cred]
+    else:
+        krb5_args = []
+    url = f'monetdb://{listen_host}:{listen_port}/demo?' + urllib.parse.urlencode(urlparams, quote_via=urllib.parse.quote)
     # Start the demoserver
     proc = subprocess.Popen(
-        [sys.executable, 'demoserver.py', '-v', listen_address, *krb_args],
+        [sys.executable, 'demoserver.py', '-v', listen_address, *krb5_args],
         shell=False,
         stdin=subprocess.DEVNULL,
     )

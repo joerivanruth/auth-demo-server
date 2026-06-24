@@ -139,7 +139,11 @@ def authorize_connection(id: str, hs: Handshake) -> Optional[str]:
         return authzid
     elif not authzid and len(candidates) == 1:
         return list(candidates)[0]
+    elif not candidates:
+        logging.debug(f'{id}: {authcid=} does not match any known user')
+        return None
     else:
+        logging.debug(f'{id}: {authcid=} matches more than one user: {', '.join(candidates)}')
         return None
 
 

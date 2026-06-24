@@ -15,11 +15,29 @@ jobs:
       - name: Download jdbcclient jar
         run: curl -sSf -O https://www.monetdb.org/downloads/Java/jdbcclient.jre8.jar
 
-      - name: Install pymonetdb
-        run: pip3 install --user --upgrade pymonetdb cryptography pytest
+      - name: Check the environment
+        run: |
+          set -x
+          ip link list
+          ip addr list
+          ip route list
+          hostname
+          hostname -f
+
+      - name: Set up throwaway Kerberos environment
+        run: sudo ./tests/setup-github-ci-kerberos.sh
+
+      - name: Log in to Kerberos
+        run: |
+          echo password | kinit testuser
+          klist
+
+      - name: Install Python dependencies
+        run: sudo apt install build-essential libkrb5-dev && echo ==== && pip3 install --user --upgrade pip && echo ==== && pip install --user --upgrade --group dev .   #pymonetdb cryptography pytest
+
 
       - name: Run pytest
-        run: FORCE_TESTS=most CLASSPATH=jdbcclient.jre8.jar pytest -v
+        run: FORCE_TESTS=all TEST_KEYTAB=/etc/monetdb.keytab CLASSPATH=jdbcclient.jre8.jar pytest -v
 
       - name: Start MonetDB
         run: |
@@ -28,7 +46,7 @@ jobs:
           monetdb create -pmonetdb demo
           monetdb start demo
 
-      - name: Run democlient
+      - name: Run democlient against real MonetDB in proxy mode
         run: ./democlient.py -v monetdb:///demo
 
       - name: Switch MonetDB to redirect mode
@@ -37,5 +55,5 @@ jobs:
           monetdbd set forward=redirect /tmp/farm
           monetdbd start /tmp/farm
 
-      - name: Run democlient in redirect mode
+      - name: Run democlient against real MonetDB in redirect mode
         run: ./democlient.py -v monetdb:///demo

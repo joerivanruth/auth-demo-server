@@ -56,6 +56,37 @@ wheels = [
 ]
 
 [[package]]
+name = "auth-demo-server"
+version = "0.1.0"
+source = { virtual = "." }
+dependencies = [
+    { name = "gssapi" },
+    { name = "pymonetdb" },
+    { name = "scramp" },
+]
+
+[package.dev-dependencies]
+dev = [
+    { name = "mypy" },
+    { name = "pytest" },
+    { name = "ruff" },
+]
+
+[package.metadata]
+requires-dist = [
+    { name = "gssapi", specifier = ">=1.11.1" },
+    { name = "pymonetdb", specifier = ">=1.9.0" },
+    { name = "scramp", specifier = ">=1.4.9" },
+]
+
+[package.metadata.requires-dev]
+dev = [
+    { name = "mypy", specifier = ">=2.1.0" },
+    { name = "pytest", specifier = ">=9.0.3" },
+    { name = "ruff", specifier = ">=0.15.17" },
+]
+
+[[package]]
 name = "colorama"
 version = "0.4.6"
 source = { registry = "https://pypi.org/simple" }
@@ -71,37 +102,6 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/60/8b/32f9823da46cde7df2087faa08cd98d01b908f8dcab982cdba9c84e85355/decorator-5.3.1.tar.gz", hash = "sha256:4cbcdd55a6efadb9dbea26b858f4fb3264567b52d69ca0d25b721b553f60ea82", size = 58084, upload-time = "2026-05-18T06:03:28.057Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/05/7f/798705f5296a58ca505d600456748d1be48078eac8a7050d8a98bc9edb89/decorator-5.3.1-py3-none-any.whl", hash = "sha256:f47fe6fdbd2edd623ecfe36875d37aba411624e2670dd395dddae1358689bb3c", size = 10365, upload-time = "2026-05-18T06:03:26.517Z" },
-]
-
-[[package]]
-name = "demo-server"
-version = "0.1.0"
-source = { virtual = "." }
-dependencies = [
-    { name = "gssapi" },
-    { name = "scramp" },
-]
-
-[package.dev-dependencies]
-dev = [
-    { name = "mypy" },
-    { name = "pymonetdb" },
-    { name = "pytest" },
-    { name = "ruff" },
-]
-
-[package.metadata]
-requires-dist = [
-    { name = "gssapi", specifier = ">=1.11.1" },
-    { name = "scramp", specifier = ">=1.4.9" },
-]
-
-[package.metadata.requires-dev]
-dev = [
-    { name = "mypy", specifier = ">=2.1.0" },
-    { name = "pymonetdb", specifier = ">=1.9.0" },
-    { name = "pytest", specifier = ">=9.0.3" },
-    { name = "ruff", specifier = ">=0.15.17" },
 ]
 
 [[package]]
