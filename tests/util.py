@@ -23,6 +23,9 @@ JDBCCLIENT = 'org.monetdb.client.JdbcClient'
 # Allow to set path to mclient using env var
 MCLIENT = os.getenv('MCLIENT', 'mclient')
 
+# Kerberos tests need a keytab to be available
+KEYTAB = os.getenv('TEST_KEYTAB', None)
+
 HAVE_PTY_MODULE = 'pymonetdb' in FORCE_TESTS
 try:
     HAVE_PTY_MODULE or importlib.import_module('pty')
@@ -49,6 +52,27 @@ needs_pty_module = pytest.mark.skipif(not HAVE_PTY_MODULE, reason='needs pty mod
 needs_mclient = pytest.mark.skipif(not HAVE_MCLIENT, reason='needs mclient')
 needs_jdbcclient = pytest.mark.skipif(not HAVE_JDBCCLIENT, reason='needs jdbcclient')
 
+if not KEYTAB:
+    no_kerberos_reason = '$TEST_KEYTAB not set'
+elif not os.path.isfile(KEYTAB):
+    no_kerberos_reason = f'keytab not found: {KEYTAB}'
+else:
+    gssapi = None
+    try:
+        gssapi = importlib.import_module('gssapi')
+    except ModuleNotFoundError:
+        no_kerberos_reason = 'gssapi module not present'
+    if gssapi:
+        try:
+            # check for valid TGT
+            gssapi.Credentials(usage='initiate')
+            no_kerberos_reason = ''
+        except gssapi.raw.GSSError as e:
+            no_kerberos_reason = str(e)
+HAVE_KERBEROS = not no_kerberos_reason or 'kerberos' in FORCE_TESTS
+
+needs_kerberos = pytest.mark.skipif(not HAVE_KERBEROS, reason=no_kerberos_reason)
+
 
 def pick_listenaddr() -> Tuple[str, int]:
     """Pick a free port number to listen on."""
@@ -65,12 +89,13 @@ def running_demoserver():
     listen_host = 'localhost'
     # Pick an address for the demo server to listen on
     with socket.create_server(address=(listen_host, 0), family=socket.AF_INET) as sock:
-        listen_port = sock.getsockname()[1]
+        ignored, listen_port = sock.getsockname()
     listen_address = f'{listen_host}:{listen_port}'
     url = f'monetdb://{listen_host}:{listen_port}/demo?user=monetdb&password=monetdb'
+    krb_args = ['-k', KEYTAB] if HAVE_KERBEROS else []
     # Start the demoserver
     proc = subprocess.Popen(
-        [sys.executable, 'demoserver.py', '-v', listen_address],
+        [sys.executable, 'demoserver.py', '-v', listen_address, *krb_args],
         shell=False,
         stdin=subprocess.DEVNULL,
     )

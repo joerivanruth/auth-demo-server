@@ -4,6 +4,7 @@ from unittest import TestCase
 
 from util import (
     running_demoserver,
+    needs_kerberos,
 )
 
 
@@ -16,6 +17,10 @@ class MechanismTests(TestCase):
         with running_demoserver() as url:
             cmd = [sys.executable, 'democlient.py', '-v', url, '-m', mechname]
             subprocess.check_call(cmd)
+
+    @needs_kerberos
+    def test_naive_gssapi(self):
+        self.run_mechanism_test('NAIVE_GSSAPI')
 
     def test_scram_sha_256(self):
         self.run_mechanism_test('SCRAM-SHA-256')
