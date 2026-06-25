@@ -31,11 +31,11 @@ class Handshake:
     server_side: Optional[ServerSide]
     effective_user: Optional[str]
 
-    def __init__(self, conn, args: argparse.Namespace):
+    def __init__(self, conn, credstore: CredStore, args: argparse.Namespace):
         self.id = conn.id
         self.conn = conn
         self.args = args
-        self.credstore = CredStore.default()
+        self.credstore = credstore
 
     def execute(self) -> bool:
         ini_nonce = secrets.token_urlsafe(20)

@@ -8,7 +8,7 @@ import socket
 import threading
 from typing import Optional
 
-from credentials import PRINCIPAL
+from credentials import PRINCIPAL, Cred, CredStore
 from framing import Mapi, ResultSet
 from handshake import Handshake
 from mechanisms.naive_gssapi import NaiveGSSAPIMechanism
@@ -24,6 +24,13 @@ def parse_sockaddr(s):
         return (host, port)
 
 
+def parse_credentials(arg) -> Cred:
+    m = re.match(r'^([a-zA-Z_0-9]+)=(\w+):(\S+)$', arg)
+    if not m:
+        raise ValueError('Expect USER=METHOD:PASSWORD_DATA, not "{arg}"')
+    return Cred(m.group(1), m.group(2), m.group(3))
+
+
 argparser = argparse.ArgumentParser()
 argparser.add_argument(
     'listen_addr',
@@ -33,6 +40,14 @@ argparser.add_argument(
     help='[Host:]port to listen on, default is 50000',
 )
 argparser.add_argument('-k', '--keytab')
+argparser.add_argument(
+    '-c',
+    '--credential',
+    action='append',
+    type=parse_credentials,
+    dest='credentials',
+    help='Set credentials of the form USER=METHOD:PASSWORD',
+)
 argparser.add_argument('-P', '--principal')
 argparser.add_argument('-v', '--verbose', action='store_true')
 
@@ -62,16 +77,21 @@ def accept_connections(listen_sock: socket.socket, args):
 
 
 def handle_connection(sock: socket.socket, id: str, args):
+    if args.credentials:
+        creds = CredStore()
+        for cred in args.credentials:
+            creds.add(cred.user, cred.kind, cred.password)
+    else:
+        creds = CredStore.default()
     try:
         conn = Mapi(sock, id)
-        hs = Handshake(conn, args)
+        hs = Handshake(conn, creds, args)
         if not hs.execute():
             return
         user = authorize_connection(id, hs)
         if not user:
             return
         hs.effective_user = user
-        logging.debug(f"{id}: Authorized to connect as '{user}'")
         interact(conn, hs)
     finally:
         logging.info(f'{id}: Closing')
