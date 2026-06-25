@@ -11,6 +11,7 @@ from typing import Optional
 from credentials import PRINCIPAL, Cred, CredStore
 from framing import Mapi, ResultSet
 from handshake import Handshake
+from mechanisms import Reject
 from mechanisms.naive_gssapi import NaiveGSSAPIMechanism
 
 
@@ -83,15 +84,22 @@ def handle_connection(sock: socket.socket, id: str, args):
             creds.add(cred.user, cred.kind, cred.password)
     else:
         creds = CredStore.default()
+
+    conn = Mapi(sock, id)
     try:
-        conn = Mapi(sock, id)
         hs = Handshake(conn, creds, args)
-        if not hs.execute():
-            return
-        user = authorize_connection(id, hs)
-        if not user:
-            return
-        hs.effective_user = user
+        final_message = hs.execute()
+        hs.effective_user = authorize_connection(id, hs)
+        assert hs.server_side
+        logging.debug(f"Authorized '{hs.server_side.authcid}' to log in as '{hs.effective_user}'")
+        conn.send(final_message)
+    except Reject as e:
+        logging.error(f'{id}: {e}')
+        try:
+            conn.send(f'!{e.client_message}')
+        except IOError:
+            pass
+    else:
         interact(conn, hs)
     finally:
         logging.info(f'{id}: Closing')

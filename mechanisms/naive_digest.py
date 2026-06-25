@@ -3,7 +3,7 @@ import secrets
 from typing import Any, Optional, Tuple
 
 from credentials import PLAIN, CredStore
-from mechanisms import ClientSide, Mechanism, Reject, ServerSide, invalid_credentials
+from mechanisms import ClientSide, Mechanism, Reject, ServerSide
 
 
 class NaiveDigestMechanism(Mechanism):
@@ -54,10 +54,12 @@ class NaiveDigestServer(ServerSide):
         authzid, authcid, hashed = parts
 
         password = self.credstore.get_last(authcid, PLAIN)
-        expected = None if password is None else squish(self.nonce, password)
-
-        if expected is None or expected != hashed:
-            raise invalid_credentials()
+        if password is None:
+            raise Reject(f"Unknown authcid '{authcid}")
+        else:
+            expected = squish(self.nonce, password)
+            if hashed != expected:
+                raise Reject(f"Wrong password for authcid '{authcid}'")
 
         self.authzid = authzid or None
         self.authcid = authcid

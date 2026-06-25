@@ -37,62 +37,47 @@ class Handshake:
         self.args = args
         self.credstore = credstore
 
-    def execute(self) -> bool:
+    def execute(self):
         ini_nonce = secrets.token_urlsafe(20)
         available_mechanisms = dict((m.wire_name, m) for m in mechanisms.MECHANISMS)
         challenge = f'{ini_nonce}:mserver:9:{",".join(available_mechanisms.keys())}:LIT:{self.obfuscation_algo.upper()}:sql=6:BINARY=1:OOBINTR=1:CLIENTINFO:'
         try:
             self.conn.send(challenge)
         except BrokenPipeError:
-            logging.info(f'{self.id}: Client closed the connection')
-            return False
+            raise Reject(f'{self.id}: Client closed the connection')
 
         response = self.conn.receive()
         if response is None:
-            logging.info(f'{self.id}: Client closed the connection')
-            return False
+            raise Reject(f'{self.id}: Client closed the connection')
         response_parts = response.rstrip('\n').split(':')
         if len(response_parts) < 5:
-            logging.error(f'{self.id}: Too few response components: {response}')
-            return False
+            raise Reject(f'{self.id}: Too few response components: {response}')
         user = response_parts[1]
         mech_and_payload = response_parts[2]
         self.dbname = response_parts[4]
 
         # parse {MECHNAME}PAYLOAD
         if not mech_and_payload.startswith('{') or '}' not in mech_and_payload:
-            logging.error(f'{self.id}: invalid mechanism selection')
-            return False
+            raise Reject(f'{self.id}: invalid mechanism selection')
         mech_name, payload = mech_and_payload[1:].split('}', 1)
         self.mech = available_mechanisms.get(mech_name)
         if not self.mech:
-            logging.error(f'{self.id}: unsupported auth mechanism')
-            return False
+            raise Reject(f'{self.id}: unsupported auth mechanism')
 
-        try:
-            if isinstance(self.mech, mechanisms.ClassicMechanism):
-                err_msg = self.execute_classic(ini_nonce, user, payload)
-            else:
-                err_msg = self.execute_modern(payload)
-        except Reject as e:
-            logging.error(f'{self.id}: {e}')
-            self.conn.send('!Authentication failed')
-            return False
-        if err_msg is not None:
-            logging.error(f'{self.id}: {err_msg}')
-            self.conn.send('!Authentication failed')
-            return False
+        if isinstance(self.mech, mechanisms.ClassicMechanism):
+            final_message = self.execute_classic(ini_nonce, user, payload)
         else:
-            assert (
-                self.server_side
-            )  # should have been set by either execute_classic or _modern above
-            authcid = self.server_side.authcid
-            authzid = self.server_side.authzid
-            mech = self.mech.wire_name
-            logging.debug(f'{self.id}: Authenticated {mech}: {authcid=} {authzid=}')
-            return True
+            final_message = self.execute_modern(payload)
+        assert (self.server_side)  # both set this
 
-    def execute_modern(self, payload: str) -> Optional[str]:
+        authcid = self.server_side.authcid
+        authzid = self.server_side.authzid
+        mech = self.mech.wire_name
+        logging.debug(f'{self.id}: Authenticated {mech}: {authcid=} {authzid=}')
+
+        return final_message
+
+    def execute_modern(self, payload: str) -> str:
         assert self.mech
         opts = {}
         if self.args.keytab:
@@ -113,23 +98,23 @@ class Handshake:
         # process the reply and send a new challenge if necessary
         for i in range(10):
             if not client_token_str.startswith('+'):
-                return 'client unexpectedly stopped authenticating'
+                raise Reject('client unexpectedly stopped authenticating')
             client_token = bytes.fromhex(client_token_str[1:])
             server_done, challenge = ctx.next_challenge(client_token)
-            challenge_str = '*' if server_done else ''
-            if challenge:
-                challenge_str += '+' + challenge.hex()
-            self.conn.send(challenge_str)
             if server_done:
-                break
-            client_token_str = self.conn.receive() or ''
+                self.server_side = ctx
+                if challenge is None:
+                    return '*'
+                else:
+                    return '*+' + challenge.hex()
+            else:
+                assert challenge
+                self.conn.send('+' + challenge.hex())
+                client_token_str = self.conn.receive() or ''
         else:
-            return 'exchange takes too long'
+            raise Reject('exchange takes too long')
 
-        self.server_side = ctx
-        return None
-
-    def execute_classic(self, nonce: str, user: str, reply: str) -> Optional[str]:
+    def execute_classic(self, nonce: str, user: str, reply: str) -> str:
         assert self.mech
         assert isinstance(self.mech, ClassicMechanism)
         ctx = self.mech.start_server(credstore=self.credstore, opts={})
@@ -140,13 +125,11 @@ class Handshake:
         ctx.set_nonce(bnonce)
         chal = ctx.initial_challenge()
         assert bnonce == chal
-        try:
-            done, nchal = ctx.next_challenge(bytes(reply, 'utf-8'))
-            assert done
-            assert nchal is None
-        except mechanisms.Reject as e:
-            return str(e)
 
-        self.conn.send('')
+
+        done, nchal = ctx.next_challenge(bytes(reply, 'utf-8'))
+        assert done
+        assert nchal is None
+
         self.server_side = ctx
-        return None
+        return ''

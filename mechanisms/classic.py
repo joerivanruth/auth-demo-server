@@ -3,7 +3,7 @@ import secrets
 from typing import Any, Optional, Tuple
 
 from credentials import PLAIN, CredStore
-from mechanisms import ClientSide, Mechanism, ServerSide, invalid_credentials
+from mechanisms import ClientSide, Mechanism, Reject, ServerSide
 
 
 class ClassicMechanism(Mechanism):
@@ -75,4 +75,5 @@ class ClassicServer(ServerSide):
             self.authzid = None
             return True, None
         else:
-            raise invalid_credentials()
+            raise Reject(f"Wrong password for authcid '{self.authcid}'")
+

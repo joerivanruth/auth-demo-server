@@ -44,11 +44,15 @@ class Mechanism(ABC):
 
 
 class Reject(Exception):
-    pass
+    client_message: str
+    server_side_log_message: str
+    authentication_failed = 'Authentication failed'
 
-
-def invalid_credentials():
-    return Reject('invalid credentials')
+    def __init__(self, message: Optional[str] = None, public: bool = False):
+        if message is None:
+            message = self.authentication_failed
+        super().__init__(message)
+        self.client_message = message if public else self.authentication_failed
 
 
 # ruff: disable[E402]

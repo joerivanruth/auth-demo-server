@@ -4,9 +4,9 @@ from credentials import PLAIN, CredStore
 from mechanisms import (
     ClientSide,
     Mechanism,
+    Reject,
     ServerSide,
     Target,
-    invalid_credentials,
 )
 
 
@@ -47,7 +47,7 @@ class PlainServer(ServerSide):
         packet = str(token, 'utf-8')
         parts = packet.split('\x00')
         if len(parts) != 3:
-            raise invalid_credentials()
+            raise Reject('invalid client response, found {len(parts)} parts, need 3')
         [authzid, authcid, password] = parts
 
         server_password = self.credstore.get_last(authcid, PLAIN)
@@ -57,4 +57,4 @@ class PlainServer(ServerSide):
             self.authzid = authzid or None
             return True, None
         else:
-            raise invalid_credentials()
+            raise Reject()
