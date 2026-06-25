@@ -317,7 +317,8 @@ def check_server_error(msg):
 if __name__ == '__main__':
     args = argparser.parse_args()
     level = logging.DEBUG if args.verbose else logging.WARNING
-    logging.basicConfig(level=level)
+    logformat = 'CLIENT:  %(message)s'
+    logging.basicConfig(level=level, format=logformat)
     logging.debug(args)
     try:
         exit(main(args) or 0)

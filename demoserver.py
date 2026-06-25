@@ -196,7 +196,8 @@ connection_id_counter = 10
 if __name__ == '__main__':
     args = argparser.parse_args()
     level = logging.DEBUG if args.verbose else logging.WARNING
-    logging.basicConfig(level=level)
+    logformat = 'SERVER:  %(message)s'
+    logging.basicConfig(level=level, format=logformat)
     logging.debug(args)
     old_excepthook = threading.excepthook
 
