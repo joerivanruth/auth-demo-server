@@ -89,3 +89,4 @@ def prepend_mechanism_if_available(reqmods: list[str], modname: str, classname: 
 
 prepend_mechanism_if_available(['scramp'], 'mechanisms.naive_scram', 'NaiveScramMechanism')
 prepend_mechanism_if_available(['gssapi'], 'mechanisms.naive_gssapi', 'NaiveGSSAPIMechanism')
+prepend_mechanism_if_available(['gssapi'], 'mechanisms.gssapi', 'GSSAPIMechanism')
