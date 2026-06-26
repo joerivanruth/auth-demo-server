@@ -38,6 +38,12 @@ argparser.add_argument(
     default='50000',
     help='[Host:]port to listen on, default is 50000',
 )
+argparser.add_argument(
+    '-m',
+    '--methods',
+    help='Comma separated list of allowed mechanisms',
+    type=lambda s: [m.strip().upper() for m in s.split(',')],
+)
 argparser.add_argument('-k', '--keytab')
 argparser.add_argument(
     '-c',

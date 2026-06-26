@@ -39,7 +39,7 @@ class Handshake:
 
     def execute(self):
         ini_nonce = secrets.token_urlsafe(20)
-        available_mechanisms = dict((m.wire_name, m) for m in mechanisms.MECHANISMS)
+        available_mechanisms = mechanisms.pick_mechanisms(self.args.methods)
         challenge = f'{ini_nonce}:mserver:9:{",".join(available_mechanisms.keys())}:LIT:{self.obfuscation_algo.upper()}:sql=6:BINARY=1:OOBINTR=1:CLIENTINFO:'
         try:
             self.conn.send(challenge)

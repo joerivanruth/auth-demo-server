@@ -239,13 +239,10 @@ def attempt_login(target: Target, mapi: Mapi, args):
         target.password = 'merovingian'
 
     assert available_mechs_str is not None
-    available_mechs = set(available_mechs_str.split(','))
-    if args.methods:
-        available_mechs &= set(args.methods)
-    for mech in mechanisms.MECHANISMS:
-        if mech.wire_name in available_mechs:
-            logging.debug(f'Using {mech.wire_name} authentication')
-            break
+    suitable_mechs = mechanisms.pick_mechanisms(*args.methods)
+    mech = next(iter(suitable_mechs.values()), None)
+    if mech:
+        logging.debug(f'Using {mech.wire_name} authentication')
     else:
         raise ErrorMessage(f'No supported authentication mechanism among {available_mechs_str}')
 

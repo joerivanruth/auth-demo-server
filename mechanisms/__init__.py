@@ -56,6 +56,24 @@ class Reject(Exception):
         self.client_message = message if public else self.authentication_failed
 
 
+def pick_mechanisms(*mechnames) -> dict[str, Mechanism]:
+    mechnames = [m for m in mechnames or [] if m]
+    by_name = dict()
+    for m in MECHANISMS:
+        assert m.wire_name not in by_name, m.wire_name
+        by_name[m.wire_name] = m
+    if not mechnames:
+        return by_name
+    result = dict()
+    for comma_separated in mechnames:
+        for name in comma_separated.split(','):
+            name = name.upper().strip()
+            if name not in by_name:
+                continue
+            result[name] = by_name[name]
+    return result
+
+
 # ruff: disable[E402]
 from credentials import CredStore
 from mechanisms.plain import PlainMechanism
