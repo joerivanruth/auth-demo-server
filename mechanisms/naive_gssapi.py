@@ -12,6 +12,7 @@ from mechanisms import ClientSide, Mechanism, Reject, ServerSide
 class NaiveGSSAPIMechanism(Mechanism):
     wire_name = 'NAIVE_GSSAPI'
     client_first = True
+    authentication_id_type = 'kerberos'
 
     @staticmethod
     def start_client(target: Target):

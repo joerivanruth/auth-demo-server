@@ -110,6 +110,7 @@ def handle_connection(sock: socket.socket, id: str, args):
 
 def authorize_connection(id: str, hs: Handshake) -> str:
     assert hs.server_side
+    assert hs.mech
     authcid = hs.server_side.authcid
     authzid = hs.server_side.authzid
     assert authcid
@@ -125,15 +126,18 @@ def authorize_connection(id: str, hs: Handshake) -> str:
     # been empty.
 
     # Handle the Kerberos case separately
-    if isinstance(hs.mech, NaiveGSSAPIMechanism):
+    cid_type = hs.mech.authentication_id_type
+    if cid_type == 'kerberos':
         candidates = set(
             cred.user
             for cred in hs.credstore.list()
             if cred.kind == PRINCIPAL and cred.password == authcid
         )
-    else:
+    elif cid_type == 'plain':
         all_users = set(hs.credstore._creds.keys())
         candidates = set([authcid]) & all_users
+    else:
+        raise Reject("Don't know how to authorize users of type '{cid_type}'")
 
     if authzid in candidates:
         return authzid

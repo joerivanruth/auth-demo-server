@@ -33,6 +33,7 @@ class ServerSide:
 class Mechanism(ABC):
     wire_name: str
     client_first: bool
+    authentication_id_type = 'plain'  # Kerberbos-based mechanisms say 'kerberos' instead
 
     @abstractmethod
     def start_client(self, *, target: Target) -> ClientSide:
