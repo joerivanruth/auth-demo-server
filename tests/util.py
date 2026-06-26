@@ -32,7 +32,7 @@ SERVER_PRINCIPAL = os.getenv('TEST_SERVER_PRINCIPAL', None)
 # Password entries to use in demoserver. If set must include
 # monetdb=plain:monetdb and for Kerberos also
 # monetdb=principal:USERNAME@REALM.
-TEST_USERS = [ cred for cred in os.getenv('TEST_USERS', '').split(',') if cred ] or None
+TEST_USERS = [cred for cred in os.getenv('TEST_USERS', '').split(',') if cred] or None
 
 HAVE_PTY_MODULE = 'pymonetdb' in FORCE_TESTS
 try:
@@ -112,7 +112,9 @@ def running_demoserver():
                 krb5_args += ['-c', cred]
     else:
         krb5_args = []
-    url = f'monetdb://{listen_host}:{listen_port}/demo?' + urllib.parse.urlencode(urlparams, quote_via=urllib.parse.quote)
+    url = f'monetdb://{listen_host}:{listen_port}/demo?' + urllib.parse.urlencode(
+        urlparams, quote_via=urllib.parse.quote
+    )
     # Start the demoserver
     proc = subprocess.Popen(
         [sys.executable, 'demoserver.py', '-v', listen_address, *krb5_args],

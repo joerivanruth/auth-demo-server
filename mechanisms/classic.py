@@ -76,4 +76,3 @@ class ClassicServer(ServerSide):
             return True, None
         else:
             raise Reject(f"Wrong password for authcid '{self.authcid}'")
-

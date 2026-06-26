@@ -6,13 +6,11 @@ import os
 import re
 import socket
 import threading
-from typing import Optional
 
 from credentials import PRINCIPAL, Cred, CredStore
 from framing import Mapi, ResultSet
 from handshake import Handshake
 from mechanisms import Reject
-from mechanisms.naive_gssapi import NaiveGSSAPIMechanism
 
 
 def parse_sockaddr(s):
@@ -91,7 +89,8 @@ def handle_connection(sock: socket.socket, id: str, args):
         final_message = hs.execute()
         hs.effective_user = authorize_connection(id, hs)
         assert hs.server_side
-        logging.debug(f"Authorized '{hs.server_side.authcid}' to log in as '{hs.effective_user}'")
+        authcid = hs.server_side.authcid
+        logging.debug(f"Authorized '{authcid}' to log in as '{hs.effective_user}'")
         conn.send(final_message)
     except Reject as e:
         logging.error(f'{id}: {e}')
@@ -109,11 +108,12 @@ def handle_connection(sock: socket.socket, id: str, args):
             pass
 
 
-def authorize_connection(id: str, hs: Handshake) -> Optional[str]:
+def authorize_connection(id: str, hs: Handshake) -> str:
     assert hs.server_side
     authcid = hs.server_side.authcid
     authzid = hs.server_side.authzid
     assert authcid
+    assert isinstance(authcid, str)
 
     # authcid is mechanism-specific, often one of our user names
     # such as 'monetdb' but it can also be a Kerberos principal
@@ -140,11 +140,9 @@ def authorize_connection(id: str, hs: Handshake) -> Optional[str]:
     elif not authzid and len(candidates) == 1:
         return list(candidates)[0]
     elif not candidates:
-        logging.debug(f'{id}: {authcid=} does not match any known user')
-        return None
+        raise Reject(f'{id}: {authcid=} does not match any known user')
     else:
-        logging.debug(f'{id}: {authcid=} matches more than one user: {', '.join(candidates)}')
-        return None
+        raise Reject(f'{id}: {authcid=} matches more than one user: {", ".join(candidates)}')
 
 
 def interact(conn: Mapi, hs: Handshake):

@@ -124,5 +124,5 @@ def dialogue(
 dialogue(mechanisms.PlainMechanism())
 dialogue(mechanisms.NaiveDigestMechanism())
 dialogue(mechanisms.ClassicMechanism('sha256', 'sha512'))
-# dialogue(mechanisms.NaiveGSSAPIMechanism())  # type: ignore
+dialogue(mechanisms.NaiveGSSAPIMechanism())  # type: ignore
 dialogue(mechanisms.NaiveScramMechanism())  # type: ignore

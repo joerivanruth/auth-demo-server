@@ -3,7 +3,7 @@ name = "auth-demo-server"
 version = "0.1.0"
 description = "A testbed for the new authentication features"
 readme = "README.md"
-# requires-python = ">=3.12"
+requires-python = ">=3.12"
 dependencies = [
     "gssapi>=1.11.1",
     "pymonetdb>=1.9.0",

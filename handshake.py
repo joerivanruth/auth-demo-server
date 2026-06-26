@@ -68,7 +68,7 @@ class Handshake:
             final_message = self.execute_classic(ini_nonce, user, payload)
         else:
             final_message = self.execute_modern(payload)
-        assert (self.server_side)  # both set this
+        assert self.server_side  # both set this
 
         authcid = self.server_side.authcid
         authzid = self.server_side.authzid
@@ -125,7 +125,6 @@ class Handshake:
         ctx.set_nonce(bnonce)
         chal = ctx.initial_challenge()
         assert bnonce == chal
-
 
         done, nchal = ctx.next_challenge(bytes(reply, 'utf-8'))
         assert done
