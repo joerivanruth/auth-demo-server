@@ -59,17 +59,15 @@ class Reject(Exception):
 # ruff: disable[E402]
 from credentials import CredStore
 from mechanisms.plain import PlainMechanism
-from mechanisms.naive_digest import NaiveDigestMechanism
 from mechanisms.classic import ClassicMechanism
 
 MECHANISMS: list[Mechanism] = [
     ClassicMechanism('ripemd160', 'sha512'),
     ClassicMechanism('sha256', 'sha512'),
-    NaiveDigestMechanism(),
     PlainMechanism(),
 ]
 
-__all__ = ['Mechanism', 'Reject', 'ClassicMechanism', 'PlainMechanism', 'NaiveDigestMechanism']
+__all__ = ['Mechanism', 'Reject', 'ClassicMechanism', 'PlainMechanism']
 
 
 def prepend_mechanism_if_available(reqmods: list[str], modname: str, classname: str):
@@ -88,5 +86,4 @@ def prepend_mechanism_if_available(reqmods: list[str], modname: str, classname: 
 
 
 prepend_mechanism_if_available(['scramp'], 'mechanisms.naive_scram', 'NaiveScramMechanism')
-prepend_mechanism_if_available(['gssapi'], 'mechanisms.naive_gssapi', 'NaiveGSSAPIMechanism')
 prepend_mechanism_if_available(['gssapi'], 'mechanisms.gssapi', 'GSSAPIMechanism')
