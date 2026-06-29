@@ -7,10 +7,11 @@ import re
 import socket
 import threading
 
-from credentials import PRINCIPAL, Cred, CredStore
+from credentials import Cred, CredStore
+import credentials
 from framing import Mapi, ResultSet
 from handshake import Handshake
-from mechanisms import Reject
+from mechanisms import Reject, Style
 
 
 def parse_sockaddr(s):
@@ -93,10 +94,10 @@ def handle_connection(sock: socket.socket, id: str, args):
     try:
         hs = Handshake(conn, creds, args)
         final_message = hs.execute()
-        hs.effective_user = authorize_connection(id, hs)
+        authorize_connection(id, hs)
         assert hs.server_side
         authcid = hs.server_side.authcid
-        logging.debug(f"Authorized '{authcid}' to log in as '{hs.effective_user}'")
+        logging.debug(f"{id}: Authorized '{authcid}' to log in as '{hs.user}'")
         conn.send(final_message)
     except Reject as e:
         logging.error(f'{id}: {e}')
@@ -114,45 +115,42 @@ def handle_connection(sock: socket.socket, id: str, args):
             pass
 
 
-def authorize_connection(id: str, hs: Handshake) -> str:
+def authorize_connection(id: str, hs: Handshake):
     assert hs.server_side
+    assert hs.user
     assert hs.mech
     authcid = hs.server_side.authcid
     authzid = hs.server_side.authzid
     assert authcid
     assert isinstance(authcid, str)
 
-    # authcid is mechanism-specific, often one of our user names
-    # such as 'monetdb' but it can also be a Kerberos principal
-    # 'jvr@EXAMPLE.COM'.
+    # authcid is mechanism-specific, usually a plain identifier
+    # such as 'monetdb'. It can also be something else, such as
+    # a Kerberos principal.
 
     # authzid is monetdb-specific. It's a SQL user name.
     # It's usually left empty. We only support empty and
-    # any value we could have chosen if it would have
-    # been empty.
+    # identical to the handshake user.
 
-    # Handle the Kerberos case separately
-    cid_type = hs.mech.authentication_id_type
-    if cid_type == 'kerberos':
-        candidates = set(
-            cred.user
-            for cred in hs.credstore.list()
-            if cred.kind == PRINCIPAL and cred.password == authcid
-        )
-    elif cid_type == 'plain':
-        all_users = set(hs.credstore._creds.keys())
-        candidates = set([authcid]) & all_users
-    else:
-        raise Reject("Don't know how to authorize users of type '{cid_type}'")
+    if authzid and authzid != hs.user:
+        raise Reject(f"SASL authzid '{authzid}' must equal handshake user '{hs.user}")
 
-    if authzid in candidates:
-        return authzid
-    elif not authzid and len(candidates) == 1:
-        return list(candidates)[0]
-    elif not candidates:
-        raise Reject(f'{id}: {authcid=} does not match any known user')
-    else:
-        raise Reject(f'{id}: {authcid=} matches more than one user: {", ".join(candidates)}')
+    if hs.mech.style == Style.PASSWORD:
+        # The mechanism has already verified that the user supplied the right password,
+        # we're done
+        return
+
+    # With the other mechanisms, we check if the authcid is known to be allowed
+    # to connect as this user.
+    # We use the
+    permitted = hs.credstore.get_all(hs.user, credentials.PRINCIPAL)
+    if authcid in permitted:
+        return
+
+    errmsg = f"{id}: External identity '{authcid}' not allowed to authenticate as '{hs.user}'"
+    for cred in hs.credstore[hs.user].list():
+        errmsg += f"\n- cred type '{cred.kind}': '{cred.password}'"
+    raise Reject(errmsg)
 
 
 def interact(conn: Mapi, hs: Handshake):
@@ -198,8 +196,8 @@ def interact_sql(conn: Mapi, hs: Handshake, sql: str) -> bool:
         if 'monet_release' in requested:
             rs.add(name='raw_strings', value='false')
         if m.group(2):
-            assert hs.effective_user
-            rs.add(name='current_user', value=hs.effective_user)
+            assert hs.user
+            rs.add(name='current_user', value=hs.user)
         conn.send(rs.render())
         return True
 

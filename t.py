@@ -60,7 +60,7 @@ def dialogue(
         show('C', str(e), modifier=f'{mech.wire_name} ERROR')
         return
     try:
-        server = mech.start_server(credstore=credstore, opts=adjusted_server_opts)
+        server = mech.start_server(usercreds=credstore['monetdb'], opts=adjusted_server_opts)
         if isinstance(server, ClassicServer):
             server.set_nonce(bytes(secrets.token_urlsafe(20), 'utf-8'))
             server.set_user(target.user)

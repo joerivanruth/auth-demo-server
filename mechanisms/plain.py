@@ -1,6 +1,6 @@
 from typing import Any, Optional, Tuple
 
-from credentials import PLAIN, CredStore
+from credentials import PLAIN, UserCreds
 from mechanisms import (
     ClientSide,
     Mechanism,
@@ -19,8 +19,8 @@ class PlainMechanism(Mechanism):
         return PlainClient(target.user, target.password)
 
     @staticmethod
-    def start_server(credstore: CredStore, opts: dict[str, Any]):
-        return PlainServer(credstore)
+    def start_server(usercreds: UserCreds, opts: dict[str, Any]):
+        return PlainServer(usercreds)
 
 
 class PlainClient(ClientSide):
@@ -35,10 +35,10 @@ class PlainClient(ClientSide):
 
 
 class PlainServer(ServerSide):
-    credstore: CredStore
+    usercreds: UserCreds
 
-    def __init__(self, credstore: CredStore):
-        self.credstore = credstore
+    def __init__(self, usercreds: UserCreds):
+        self.usercreds = usercreds
 
     def initial_challenge(self):
         return b''
@@ -50,7 +50,7 @@ class PlainServer(ServerSide):
             raise Reject('invalid client response, found {len(parts)} parts, need 3')
         [authzid, authcid, password] = parts
 
-        server_password = self.credstore.get_last(authcid, PLAIN)
+        server_password = self.usercreds.get_last(PLAIN)
 
         if password == server_password:
             self.authcid = authcid

@@ -7,8 +7,8 @@ import gssapi
 from gssapi.raw import GSSError
 from pymonetdb.target import Target
 
-from credentials import CredStore
-from mechanisms import ClientSide, Mechanism, Reject, ServerSide
+from credentials import UserCreds
+from mechanisms import ClientSide, Mechanism, Reject, ServerSide, Style
 
 
 class GSSAPIMechanism(Mechanism):
@@ -16,7 +16,7 @@ class GSSAPIMechanism(Mechanism):
 
     wire_name = 'GSSAPI'
     client_first = True
-    authentication_id_type = 'kerberos'
+    style = Style.KERBEROS
 
     @staticmethod
     def start_client(target: Target):
@@ -24,7 +24,7 @@ class GSSAPIMechanism(Mechanism):
         return GSSAPIClient(server_principal)
 
     @staticmethod
-    def start_server(credstore: CredStore, opts: dict[str, Any]):
+    def start_server(usercreds: UserCreds, opts: dict[str, Any]):
         principal = opts.get('principal')
         if not principal:
             fqdn = socket.getfqdn()
@@ -40,7 +40,7 @@ class GSSAPIMechanism(Mechanism):
         )
         server_creds = gssapi.Credentials(acquire_result.creds)
 
-        return GSSAPIServer(server_creds, credstore)
+        return GSSAPIServer(server_creds, usercreds)
 
 
 def target_lookup(target: Target, key: str) -> Optional[Any]:
@@ -148,13 +148,13 @@ class GSSAPIClient(ClientSide):
 
 class GSSAPIServer(ServerSide):
     server_creds: gssapi.Credentials
-    credstore: CredStore
+    usercreds: UserCreds
     ctx: Optional[gssapi.SecurityContext] = None
     final_message_sent = False
 
-    def __init__(self, server_creds: gssapi.Credentials, credstore: CredStore):
+    def __init__(self, server_creds: gssapi.Credentials, usercreds: UserCreds):
         self.server_creds = server_creds
-        self.credstore = credstore
+        self.usercreds = usercreds
 
     def initial_challenge(self):
         return b''

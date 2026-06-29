@@ -2,7 +2,7 @@ import hashlib
 import secrets
 from typing import Any, Optional, Tuple
 
-from credentials import PLAIN, CredStore
+from credentials import PLAIN, UserCreds
 from mechanisms import ClientSide, Mechanism, Reject, ServerSide
 
 
@@ -20,8 +20,8 @@ class ClassicMechanism(Mechanism):
         # user name has already been sent, isn't used here anymore
         return ClassicClient(self, target.password)
 
-    def start_server(self, *, credstore: CredStore, opts: dict[str, Any]):
-        return ClassicServer(self, credstore)
+    def start_server(self, *, usercreds: UserCreds, opts: dict[str, Any]):
+        return ClassicServer(self, usercreds)
 
     def squish(self, nonce: bytes, password: str) -> bytes:
         obfuscated = hashlib.new(self.obfuscation_algo, bytes(password, 'utf-8')).hexdigest()
@@ -44,12 +44,12 @@ class ClassicClient(ClientSide):
 
 class ClassicServer(ServerSide):
     mech: ClassicMechanism
-    credstore: CredStore
+    usercreds: UserCreds
     nonce: Optional[bytes]
 
-    def __init__(self, mech: ClassicMechanism, credstore: CredStore):
+    def __init__(self, mech: ClassicMechanism, usercreds: UserCreds):
         self.mech = mech
-        self.credstore = credstore
+        self.usercreds = usercreds
         self.nonce = None
 
     def set_nonce(self, nonce: bytes):
@@ -69,7 +69,7 @@ class ClassicServer(ServerSide):
             # have been set with set_nonce()
             self.nonce = bytes(secrets.token_urlsafe(10), 'utf-8')
 
-        password = self.credstore.get_last(self.authcid, PLAIN)
+        password = self.usercreds.get_last(PLAIN)
         expected = self.mech.squish(self.nonce, password) if password else None
         if token == expected:
             self.authzid = None

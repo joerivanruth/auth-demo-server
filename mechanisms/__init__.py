@@ -1,11 +1,13 @@
 from abc import ABC, abstractmethod
+from enum import Enum
+import enum
 import importlib
 import sys
 from typing import Any, Optional, Tuple
 
 from pymonetdb.target import Target
 
-from credentials import CredStore
+from credentials import UserCreds
 
 
 class ClientSide:
@@ -30,17 +32,22 @@ class ServerSide:
         raise NotImplementedError()
 
 
+class Style(Enum):
+    PASSWORD = enum.auto()
+    KERBEROS = enum.auto()
+
+
 class Mechanism(ABC):
     wire_name: str
     client_first: bool
-    authentication_id_type = 'plain'  # Kerberbos-based mechanisms say 'kerberos' instead
+    style: Style = Style.PASSWORD
 
     @abstractmethod
     def start_client(self, *, target: Target) -> ClientSide:
         raise NotImplementedError()
 
     @abstractmethod
-    def start_server(self, *, credstore: CredStore, opts: dict[str, Any]) -> ServerSide:
+    def start_server(self, *, usercreds: UserCreds, opts: dict[str, Any]) -> ServerSide:
         raise NotImplementedError()
 
 
@@ -56,12 +63,13 @@ class Reject(Exception):
         self.client_message = message if public else self.authentication_failed
 
 
-def pick_mechanisms(*mechnames) -> dict[str, Mechanism]:
+def pick_mechanisms(mechnames: list[str], filter=None) -> dict[str, Mechanism]:
     mechnames = [m for m in mechnames or [] if m]
     by_name = dict()
     for m in MECHANISMS:
         assert m.wire_name not in by_name, m.wire_name
-        by_name[m.wire_name] = m
+        if filter is None or filter(m):
+            by_name[m.wire_name] = m
     if not mechnames:
         return by_name
     result = dict()
@@ -74,14 +82,14 @@ def pick_mechanisms(*mechnames) -> dict[str, Mechanism]:
     return result
 
 
-# ruff: disable[E402]
-from credentials import CredStore
+# ruff: disable[E401,E402]
 from mechanisms.plain import PlainMechanism
 from mechanisms.classic import ClassicMechanism
 
 MECHANISMS: list[Mechanism] = [
-    ClassicMechanism('ripemd160', 'sha512'),
+    ClassicMechanism('sha512', 'sha512'),
     ClassicMechanism('sha256', 'sha512'),
+    ClassicMechanism('ripemd160', 'sha512'),
     PlainMechanism(),
 ]
 

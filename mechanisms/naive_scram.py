@@ -4,7 +4,7 @@ from typing import Any, Optional, Tuple
 import scramp  # type: ignore
 import scramp.core  # type: ignore
 
-from credentials import PLAIN, CredStore
+from credentials import PLAIN, UserCreds
 from mechanisms import (
     ClientSide,
     Mechanism,
@@ -23,8 +23,8 @@ class NaiveScramMechanism(Mechanism):
         return NaiveScramClient(target.user, target.password)
 
     @staticmethod
-    def start_server(credstore: CredStore, opts: dict[str, Any]):
-        return NaiveScramServer(credstore)
+    def start_server(usercreds: UserCreds, opts: dict[str, Any]):
+        return NaiveScramServer(usercreds)
 
 
 class NaiveScramClient(ClientSide):
@@ -86,12 +86,12 @@ _mech = scramp.ScramMechanism('SCRAM-SHA-256')
 
 
 class NaiveScramServer(ServerSide):
-    credstore: CredStore
+    usercreds: UserCreds
     server: scramp.core.ScramServer
     initial: bool
 
-    def __init__(self, credstore: CredStore):
-        self.credstore = credstore
+    def __init__(self, usercreds: UserCreds):
+        self.usercreds = usercreds
         try:
             self.server = _mech.make_server(self.auth_fn)
         except scramp.ScramException as e:
@@ -124,16 +124,16 @@ class NaiveScramServer(ServerSide):
 
     def auth_fn(self, user: str) -> Tuple[bytes, bytes, bytes, int]:
         mechname = NaiveScramMechanism.wire_name
-        scrampw = self.credstore.get_last(user, mechname)
+        scrampw = self.usercreds.get_last(mechname)
         if scrampw is None:
-            plainpw = self.credstore.get_last(user, PLAIN)
+            plainpw = self.usercreds.get_last(PLAIN)
             if plainpw is None:
                 raise Reject(f"User '{user}' unknown")
             scrampw = make_password_file_entry(plainpw)
             logging.debug(
                 f"Invented '{mechname}' password based on '{PLAIN}' password: {scrampw}"
             )
-            self.credstore.set(user, mechname, scrampw)
+            self.usercreds.set(mechname, scrampw)
         return parse_password_file_entry(scrampw)
 
 

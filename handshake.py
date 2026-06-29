@@ -29,7 +29,6 @@ class Handshake:
     dbname: str
     mech: Optional[Mechanism]
     server_side: Optional[ServerSide]
-    effective_user: Optional[str]
 
     def __init__(self, conn, credstore: CredStore, args: argparse.Namespace):
         self.id = conn.id
@@ -39,7 +38,7 @@ class Handshake:
 
     def execute(self):
         ini_nonce = secrets.token_urlsafe(20)
-        available_mechanisms = mechanisms.pick_mechanisms(self.args.methods)
+        available_mechanisms = mechanisms.pick_mechanisms(self.args.methods or [])
         challenge = f'{ini_nonce}:mserver:9:{",".join(available_mechanisms.keys())}:LIT:{self.obfuscation_algo.upper()}:sql=6:BINARY=1:OOBINTR=1:CLIENTINFO:'
         try:
             self.conn.send(challenge)
@@ -52,7 +51,7 @@ class Handshake:
         response_parts = response.rstrip('\n').split(':')
         if len(response_parts) < 5:
             raise Reject(f'{self.id}: Too few response components: {response}')
-        user = response_parts[1]
+        self.user = response_parts[1]
         mech_and_payload = response_parts[2]
         self.dbname = response_parts[4]
 
@@ -65,7 +64,7 @@ class Handshake:
             raise Reject(f'{self.id}: unsupported auth mechanism')
 
         if isinstance(self.mech, mechanisms.ClassicMechanism):
-            final_message = self.execute_classic(ini_nonce, user, payload)
+            final_message = self.execute_classic(ini_nonce, payload)
         else:
             final_message = self.execute_modern(payload)
         assert self.server_side  # both set this
@@ -84,7 +83,7 @@ class Handshake:
             opts['keytab'] = self.args.keytab
         if self.args.principal:
             opts['principal'] = self.args.principal
-        ctx = self.mech.start_server(credstore=self.credstore, opts=opts)
+        ctx = self.mech.start_server(usercreds=self.credstore[self.user], opts=opts)
 
         # send initial challenge to client and await reply
         server_token = ctx.initial_challenge()
@@ -114,11 +113,11 @@ class Handshake:
         else:
             raise Reject('exchange takes too long')
 
-    def execute_classic(self, nonce: str, user: str, reply: str) -> str:
+    def execute_classic(self, nonce: str, reply: str) -> str:
         assert self.mech
         assert isinstance(self.mech, ClassicMechanism)
-        ctx = self.mech.start_server(credstore=self.credstore, opts={})
-        ctx.set_user(user)
+        ctx = self.mech.start_server(usercreds=self.credstore[self.user], opts={})
+        ctx.set_user(self.user)
 
         # make sure to use the nonce that was sent to the client
         bnonce = bytes(nonce, 'utf-8')

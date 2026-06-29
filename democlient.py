@@ -11,6 +11,7 @@ from framing import Mapi
 from pymonetdb.target import Target
 
 import mechanisms
+from mechanisms import MECHANISMS, Mechanism
 from mechanisms.classic import ClassicMechanism
 
 
@@ -232,19 +233,15 @@ def attempt_login(target: Target, mapi: Mapi, args):
     [nonce, servertype, proto, available_mechs_str, endian, obfusc_algo, *rest] = parts
     if proto != '9':
         raise ErrorMessage('Only protocol version 9 is supported, not {proto}')
+    assert available_mechs_str is not None
+    available_mech_names = set(available_mechs_str.split(','))
 
     if servertype == 'merovingian':
         target = target.clone()
         target.user = 'merovingian'
         target.password = 'merovingian'
 
-    assert available_mechs_str is not None
-    suitable_mechs = mechanisms.pick_mechanisms(*args.methods)
-    mech = next(iter(suitable_mechs.values()), None)
-    if mech:
-        logging.debug(f'Using {mech.wire_name} authentication')
-    else:
-        raise ErrorMessage(f'No supported authentication mechanism among {available_mechs_str}')
+    mech = pick_mechanism(target, args, available_mech_names)
 
     try:
         if isinstance(mech, ClassicMechanism):
@@ -263,7 +260,7 @@ def attempt_login_modern(mech: mechanisms.Mechanism, target: Target, mapi: Mapi)
         # the first challenge is known to be empty and not really sent by the server
         server_token = ctx.respond(b'')
         response += '+' + server_token.hex()
-    reply = f'BIG::{response}:sql:{target.database}:'  # note user field left empty
+    reply = f'BIG:{target.user}:{response}:sql:{target.database}:'  # note user field left empty
     mapi.send(reply)
 
     for i in range(10):
@@ -303,6 +300,57 @@ def attempt_login_classic(mech: ClassicMechanism, target: Target, mapi: Mapi, no
     logging.debug('HAPPY')
     first_line = server_response.strip().split('\n', 1)[0]
     return first_line
+
+
+def pick_mechanism(target: Target, args: argparse.Namespace, available: set[str]) -> Mechanism:
+    # The URL influences mechanism selection through property
+    # '_authmechanism' (will be 'authmechanism' later when we update the Target class)
+    # The command line option -m --methods also influences it.
+    # How do they interact?
+    #
+    # - If the neither URL or command line is given, the default is 'PASSWORD'
+    # - If URL is not given but command line is, command line decides
+    # - If URL is given and command line is not, URL decides
+    # - if both URL and command line is given, URL decides but
+    #   command line restricts the selection.
+    #
+    # The virtual mechanism 'PASSWORD' matches all password-based mechanisms
+
+    by_name = {m.wire_name: m for m in MECHANISMS}
+    cli_mech_names = list(expand_password(args.methods or ''))
+    try:
+        url_mech_names = list(expand_password(target.get('_authmechanism').upper().split(',')))
+    except KeyError:
+        url_mech_names = []
+
+    candidates = url_mech_names or cli_mech_names or list(expand_password(['PASSWORD']))
+    logging.debug(f'Candidates: {", ".join(candidates)}')
+    restrictions = set(available)
+    if cli_mech_names:
+        restrictions &= set(cli_mech_names)
+    logging.debug(f'Restrictions: {", ".join(restrictions)}')
+
+    for candidate in candidates:
+        mech = by_name.get(candidate)
+        if mech and mech.wire_name in restrictions:
+            logging.debug(f'Trying {mech.wire_name}')
+            return mech
+
+    raise ErrorMessage(
+        f'No suitable mechanism (url: {url_mech_names}, cli: {cli_mech_names}, available {list(available)}'
+    )
+
+
+def expand_password(mech_names):
+    for name in mech_names:
+        if name == 'PASSWORD':
+            yield from [
+                m.wire_name
+                for m in mechanisms.MECHANISMS
+                if m.style == mechanisms.Style.PASSWORD
+            ]
+        else:
+            yield name
 
 
 def check_server_error(msg):
