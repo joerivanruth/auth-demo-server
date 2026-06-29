@@ -12,6 +12,9 @@ class MechanismTests(TestCase):
     """
     Tests for the various mechanisms
     """
+    @needs_kerberos
+    def test_gssapi(self):
+        self.run_mechanism_test('GSSAPI')
 
     def run_mechanism_test(self, mechname):
         with running_demoserver() as url:
