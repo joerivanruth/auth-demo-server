@@ -21,7 +21,8 @@ class GSSAPIMechanism(Mechanism):
     @staticmethod
     def start_client(target: Target):
         server_principal = determine_server_principal(target)
-        return GSSAPIClient(server_principal)
+        client_creds = determine_client_creds(target)
+        return GSSAPIClient(server_principal, client_creds)
 
     @staticmethod
     def start_server(usercreds: UserCreds, opts: dict[str, Any]):
@@ -61,6 +62,29 @@ def determine_server_principal(target: Target) -> gssapi.Name:
     return parse_principal(princ)
 
 
+def determine_client_creds(target: Target) -> Optional[gssapi.Credentials]:
+    principal = target_lookup(target, '_principal')
+    keytab = target_lookup(target, '_keytab')
+    assert principal is None or isinstance(principal, str)
+    assert keytab is None or isinstance(keytab, str)
+
+    if keytab:
+        # See https://pythongssapi.github.io/python-gssapi/credstore.html for settings
+        # we can put in this 'store'
+        store: dict[bytes | str, bytes | str] = {}
+        store['client_keytab'] = keytab
+        store['ccache'] = 'MEMORY:'
+        name = parse_principal(principal) if principal else None
+        logging.debug(f'Trying to acquire {name=} from {store=}')
+        acquire_result = gssapi.Credentials.acquire(usage='initiate', name=name, store=store)
+        creds = gssapi.Credentials(acquire_result.creds)
+    else:
+        creds = gssapi.Credentials(usage='initiate')
+
+    logging.debug(f'{creds.name=}')
+    return creds
+
+
 def parse_principal(princ: str) -> gssapi.Name:
     if '@' in princ and '/' in princ:
         name_type = gssapi.NameType.kerberos_principal
@@ -84,12 +108,16 @@ def verify_flags(actual_flags: int, required_flags: list[gssapi.RequirementFlag]
 
 
 class GSSAPIClient(ClientSide):
+    client_creds: Optional[gssapi.Credentials]
     server_name: gssapi.Name
     ctx: Optional[gssapi.SecurityContext]
     req_flags: list[gssapi.RequirementFlag]
     final_message_sent = False
 
-    def __init__(self, server_principal: gssapi.Name):
+    def __init__(
+        self, server_principal: gssapi.Name, client_creds: Optional[gssapi.Credentials]
+    ):
+        self.client_creds = client_creds
         self.server_name = server_principal
         self.ctx = None
         # is there any reason not to enable mutual_authentication,
@@ -102,7 +130,10 @@ class GSSAPIClient(ClientSide):
                 assert not server_token
                 flags = reduce(lambda x, y: x | y, self.req_flags, 0)
                 self.ctx = gssapi.SecurityContext(
-                    usage='initiate', name=self.server_name, flags=flags
+                    usage='initiate',
+                    name=self.server_name,
+                    flags=flags,
+                    creds=self.client_creds,
                 )
             if not self.ctx.complete:
                 # GSSAPI negotiation ongoing
