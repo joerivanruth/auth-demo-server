@@ -90,7 +90,9 @@ def parse_principal(princ: str) -> gssapi.Name:
         name_type = gssapi.NameType.kerberos_principal
     else:
         name_type = gssapi.NameType.hostbased_service
-    return gssapi.Name(princ, name_type).canonicalize(gssapi.MechType.kerberos)
+    name = gssapi.Name(princ, name_type).canonicalize(gssapi.MechType.kerberos)
+    logging.debug(f'Canonicalize {princ} -> {name}')
+    return name
 
 
 MINIMAL_REQ_FLAGS = [

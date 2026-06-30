@@ -22,6 +22,7 @@ jobs:
           ip addr list
           ip route list
           hostname
+          hostname -d
           hostname -f
 
       - name: Set up throwaway Kerberos environment
@@ -37,7 +38,13 @@ jobs:
 
 
       - name: Run pytest
-        run: FORCE_TESTS=all TEST_KEYTAB=/etc/monetdb.keytab CLASSPATH=jdbcclient.jre8.jar pytest -v
+        env:
+          FORCE_TESTS: all
+          TEST_USERS: monetdb=principal:testuser@GITHUB.CI
+          TEST_KEYTAB: /etc/monetdb.keytab
+          ALT_CLIENT_KEYTAB: /etc/altuser.keytab
+          CLASSPATH: jdbcclient.jre8.jar
+        run: env ALT_CLIENT_PRINCIPAL="altuser/$(hostname -f)@GITHUB.CI" pytest -v
 
       - name: Start MonetDB
         run: |

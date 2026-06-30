@@ -14,7 +14,7 @@ import pytest
 # For use in CI
 FORCE_TESTS: set[str] = set(item for item in os.getenv('FORCE_TESTS', '').split(',') if item)
 if 'all' in FORCE_TESTS:
-    FORCE_TESTS |= {'most', 'kerberos'}
+    FORCE_TESTS |= {'most', 'kerberos', 'altuser'}
 if 'most' in FORCE_TESTS:
     FORCE_TESTS |= {'mclient', 'jdbc', 'pty'}
 
@@ -82,7 +82,7 @@ else:
 HAVE_KERBEROS = not no_kerberos_reason or 'kerberos' in FORCE_TESTS
 needs_kerberos = pytest.mark.skipif(not HAVE_KERBEROS, reason=no_kerberos_reason)
 
-HAVE_ALT_CLIENT = HAVE_KERBEROS and ALT_CLIENT_PRINCIPAL and ALT_CLIENT_KEYTAB
+HAVE_ALT_CLIENT = 'altuser' in FORCE_TESTS or (ALT_CLIENT_PRINCIPAL and ALT_CLIENT_KEYTAB)
 needs_alt_client = pytest.mark.skipif(
     not HAVE_ALT_CLIENT, reason='$ALT_CLIENT_PRINCIPAL or $ALT_CLIENT_KEYTAB not set'
 )
@@ -112,7 +112,6 @@ def running_demoserver(*, extra_args=[]):
         if SERVER_PRINCIPAL:
             krb5_args += ['-P', SERVER_PRINCIPAL]
             urlparams['server_principal'] = SERVER_PRINCIPAL
-        print(TEST_USERS, file=sys.stderr)
         if TEST_USERS:
             for cred in TEST_USERS:
                 krb5_args += ['-c', cred]

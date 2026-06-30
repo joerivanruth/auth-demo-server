@@ -3,6 +3,7 @@
 set -e -x
 
 MONET_PRINCIPAL="monetdb/$(hostname -f)@GITHUB.CI"
+ALT_PRINCIPAL="altuser/$(hostname -f)@GITHUB.CI"
 
 # Install the packages
 apt-get update
@@ -11,7 +12,7 @@ apt-get install -y krb5-admin-server krb5-kdc krb5-user
 
 
 # Create /etc/krb5.conf
-tee /etc/krb5.conf >/dev/null <<'EOF'
+tee /etc/krb5.conf >/dev/null <<EOF
 [libdefaults]
         default_realm = GITHUB.CI
         kdc_timesync = 1
@@ -24,7 +25,8 @@ tee /etc/krb5.conf >/dev/null <<'EOF'
                 kdc = localhost:88
                 admin_server = localhost:749
         }
-# omitted [domain_realm]
+[domain_realm]
+        .$(hostname -d) = GITHUB.CI
 EOF
 
 
@@ -56,8 +58,10 @@ kadmin.local <<EOF
 addprinc -pw password testuser
 addprinc -randkey $MONET_PRINCIPAL
 ktadd -k /etc/monetdb.keytab $MONET_PRINCIPAL
+addprinc -randkey $ALT_PRINCIPAL
+ktadd -k /etc/altuser.keytab $ALT_PRINCIPAL
 EOF
 
-chmod 0755 /etc/monetdb.keytab
+chmod 0755 /etc/monetdb.keytab /etc/altuser.keytab
 
 

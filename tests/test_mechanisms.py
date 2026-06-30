@@ -45,6 +45,7 @@ class MechanismTests(TestCase):
             _keytab=ALT_CLIENT_KEYTAB,
             _principal=ALT_CLIENT_PRINCIPAL,
         )
+        urlparams = { k: v for k, v in urlparams.items() if v is not None}
         server_args = ['-c', f'altuser=principal:{ALT_CLIENT_PRINCIPAL}']
         client_args = ['--assert-happy', f'Authenticated {ALT_CLIENT_PRINCIPAL} -> ']
         self.run_mechanism_test(
