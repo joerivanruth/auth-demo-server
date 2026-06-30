@@ -15,8 +15,9 @@ class ClientSide:
     def respond(self, token: bytes) -> bytes:
         pass
 
-    def wrap_up(self, additional_data: Optional[bytes]) -> Optional[str]:
-        return None
+    @abstractmethod
+    def wrap_up(self, additional_data: Optional[bytes]) -> str:
+        raise NotImplementedError()
 
 
 class ServerSide:

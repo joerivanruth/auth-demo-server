@@ -30,6 +30,7 @@ argparser.add_argument(
     help='Comma separated list of allowed mechanisms',
     type=lambda s: [m.strip().upper() for m in s.split(',')],
 )
+argparser.add_argument('--assert-happy', help='HAPPY message must contain this as a substring')
 argparser.add_argument('-v', '--verbose', action='store_true')
 
 
@@ -280,6 +281,10 @@ def attempt_login_modern(mech: mechanisms.Mechanism, target: Target, mapi: Mapi)
                 additional_data = None
             report = ctx.wrap_up(additional_data)
             logging.debug(f'HAPPY: {report}')
+            if args.assert_happy is not None and args.assert_happy not in report:
+                raise ErrorMessage(
+                    f"HAPPY message must contain '{args.assert_happy}': {report}"
+                )
             return ''
         else:
             raise ErrorMessage('server unexpectedly stopped authentication exchange')

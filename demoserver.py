@@ -52,7 +52,7 @@ argparser.add_argument(
     action='append',
     type=parse_credentials,
     dest='credentials',
-    help='Set credentials of the form USER=METHOD:PASSWORD',
+    help='Add credentials of the form USER=METHOD:PASSWORD',
 )
 argparser.add_argument('-P', '--principal')
 argparser.add_argument('-v', '--verbose', action='store_true')
@@ -84,7 +84,7 @@ def accept_connections(listen_sock: socket.socket, args):
 
 def handle_connection(sock: socket.socket, id: str, args):
     if args.credentials:
-        creds = CredStore()
+        creds = CredStore.default()
         for cred in args.credentials:
             creds.add(cred.user, cred.kind, cred.password)
     else:
@@ -147,7 +147,7 @@ def authorize_connection(id: str, hs: Handshake):
     if authcid in permitted:
         return
 
-    errmsg = f"{id}: External identity '{authcid}' not allowed to authenticate as '{hs.user}'"
+    errmsg = f"External identity '{authcid}' not allowed to authenticate as '{hs.user}'"
     for cred in hs.credstore[hs.user].list():
         errmsg += f"\n- cred type '{cred.kind}': '{cred.password}'"
     raise Reject(errmsg)

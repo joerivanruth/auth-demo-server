@@ -165,7 +165,7 @@ class GSSAPIClient(ClientSide):
         self.final_message_sent = True
         return wrap_result.message
 
-    def wrap_up(self, additional_data: Optional[bytes]) -> Optional[str]:
+    def wrap_up(self, additional_data: Optional[bytes]) -> str:
         if not self.final_message_sent:
             raise Reject('GSSAPI: Server completes handshake too soon')
         assert self.ctx

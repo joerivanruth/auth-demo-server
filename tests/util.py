@@ -28,6 +28,8 @@ MCLIENT = os.getenv('MCLIENT', 'mclient')
 # Optionally, the server principal can also be set.
 KEYTAB = os.getenv('TEST_KEYTAB', None)
 SERVER_PRINCIPAL = os.getenv('TEST_SERVER_PRINCIPAL', None)
+ALT_CLIENT_KEYTAB = os.getenv('ALT_CLIENT_KEYTAB', None)
+ALT_CLIENT_PRINCIPAL = os.getenv('ALT_CLIENT_PRINCIPAL', None)
 
 # Password entries to use in demoserver. If set must include
 # monetdb=plain:monetdb and for Kerberos also
@@ -78,8 +80,12 @@ else:
         except gssapi.raw.GSSError as e:
             no_kerberos_reason = str(e)
 HAVE_KERBEROS = not no_kerberos_reason or 'kerberos' in FORCE_TESTS
-
 needs_kerberos = pytest.mark.skipif(not HAVE_KERBEROS, reason=no_kerberos_reason)
+
+HAVE_ALT_CLIENT = HAVE_KERBEROS and ALT_CLIENT_PRINCIPAL and ALT_CLIENT_KEYTAB
+needs_alt_client = pytest.mark.skipif(
+    not HAVE_ALT_CLIENT, reason='$ALT_CLIENT_PRINCIPAL or $ALT_CLIENT_KEYTAB not set'
+)
 
 
 def pick_listenaddr() -> Tuple[str, int]:
@@ -91,7 +97,7 @@ def pick_listenaddr() -> Tuple[str, int]:
 
 
 @contextmanager
-def running_demoserver():
+def running_demoserver(*, extra_args=[]):
     """Context manager that starts and later kills a demoserver and returns its monetdb url"""
 
     listen_host = 'localhost'
@@ -117,7 +123,7 @@ def running_demoserver():
     )
     # Start the demoserver
     proc = subprocess.Popen(
-        [sys.executable, 'demoserver.py', '-v', listen_address, *krb5_args],
+        [sys.executable, 'demoserver.py', '-v', listen_address, *krb5_args, *extra_args],
         shell=False,
         stdin=subprocess.DEVNULL,
     )

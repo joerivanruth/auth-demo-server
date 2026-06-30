@@ -33,6 +33,9 @@ class PlainClient(ClientSide):
         packet = f'\x00{self.user or ""}\x00{self.password or ""}'
         return bytes(packet, 'utf-8')
 
+    def wrap_up(self, additional_data: Optional[bytes]) -> str:
+        return 'Succesfully authenticated'
+
 
 class PlainServer(ServerSide):
     usercreds: UserCreds
